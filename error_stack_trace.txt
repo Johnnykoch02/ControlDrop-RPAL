@@ -1,0 +1,89 @@
+ File "/home/rpal/.vscode/extensions/ms-python.python-2022.4.1/pythonFiles/lib/python/debugpy/../debugpy/server/cli.py", line 285, in run_file
+    runpy.run_path(target_as_str, run_name=compat.force_str("__main__"))
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/runpy.py", line 263, in run_path
+    pkg_name=pkg_name, script_name=fname)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/runpy.py", line 96, in _run_module_code
+    mod_name, mod_spec, pkg_name, script_name)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "Reinforcement Learning/main.py", line 332, in <module>
+    main()
+  File "Reinforcement Learning/main.py", line 328, in main
+    temp_train()#(num_steps=1000000, detailed_training=True, num_envs=1)
+  File "Reinforcement Learning/main.py", line 320, in temp_train
+    model = model.learn(1000000,)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/ppo/ppo.py", line 313, in learn
+    progress_bar=progress_bar,
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 248, in learn
+    continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 166, in collect_rollouts
+    actions, values, log_probs = self.policy(obs_tensor)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/policies.py", line 625, in forward
+    features = self.extract_features(obs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/policies.py", line 648, in extract_features
+    return super().extract_features(obs, self.features_extractor)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/policies.py", line 142, in extract_features
+    return features_extractor(preprocessed_obs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "Reinforcement Learning/src/RL/Networks/ExtractorNetworks.py", line 294, in forward
+    trf_output = self.trns_encoder(trf_input_tensor)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/transformer.py", line 538, in forward
+    x = self.norm1(x + self._sa_block(x, src_mask, src_key_padding_mask))
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/transformer.py", line 549, in _sa_block
+    need_weights=False)[0]
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/activation.py", line 1174, in forward
+    attn_mask=attn_mask, average_attn_weights=average_attn_weights)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/functional.py", line 5027, in multi_head_attention_forward
+    f"was expecting embedding dimension of {embed_dim_to_check}, but got {embed_dim}"
+AssertionError: was expecting embedding dimension of 128, but got 64 File "/home/rpal/.vscode/extensions/ms-python.python-2022.4.1/pythonFiles/lib/python/debugpy/../debugpy/server/cli.py", line 285, in run_file
+    runpy.run_path(target_as_str, run_name=compat.force_str("__main__"))
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/runpy.py", line 263, in run_path
+    pkg_name=pkg_name, script_name=fname)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/runpy.py", line 96, in _run_module_code
+    mod_name, mod_spec, pkg_name, script_name)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/runpy.py", line 85, in _run_code
+    exec(code, run_globals)
+  File "Reinforcement Learning/main.py", line 332, in <module>
+    main()
+  File "Reinforcement Learning/main.py", line 328, in main
+    temp_train()#(num_steps=1000000, detailed_training=True, num_envs=1)
+  File "Reinforcement Learning/main.py", line 320, in temp_train
+    model = model.learn(1000000,)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/ppo/ppo.py", line 313, in learn
+    progress_bar=progress_bar,
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 248, in learn
+    continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 166, in collect_rollouts
+    actions, values, log_probs = self.policy(obs_tensor)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/policies.py", line 625, in forward
+    features = self.extract_features(obs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/policies.py", line 648, in extract_features
+    return super().extract_features(obs, self.features_extractor)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/stable_baselines3/common/policies.py", line 142, in extract_features
+    return features_extractor(preprocessed_obs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "Reinforcement Learning/src/RL/Networks/ExtractorNetworks.py", line 294, in forward
+    trf_output = self.trns_encoder(trf_input_tensor)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/transformer.py", line 538, in forward
+    x = self.norm1(x + self._sa_block(x, src_mask, src_key_padding_mask))
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/transformer.py", line 549, in _sa_block
+    need_weights=False)[0]
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/module.py", line 1194, in _call_impl
+    return forward_call(*input, **kwargs)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/modules/activation.py", line 1174, in forward
+    attn_mask=attn_mask, average_attn_weights=average_attn_weights)
+  File "/home/rpal/anaconda3/envs/stbl3/lib/python3.7/site-packages/torch/nn/functional.py", line 5027, in multi_head_attention_forward
+    f"was expecting embedding dimension of {embed_dim_to_check}, but got {embed_dim}"
+AssertionError: was expecting embedding dimension of 128, but got 64

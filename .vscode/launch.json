@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name":"Python: Current File",
+            "type":"python",
+            "request":"launch",
+            "program":"${file}",
+            "console":"integratedTerminal",
+            "justMyCode":false
+        },
+        {
+            "name": "Python: Module",
+            "type": "python",
+            "request": "launch",
+            "program": "Reinforcement Learning/main.py",
+            "cwd":"${workspaceFolder}",
+            "justMyCode": false
+        },
+        {
+            "name": "Python: Validation",
+            "type": "python",
+            "request": "launch",
+            "program": "Reinforcement Learning/validation.py",
+            "args": ["--algo", "PPO", "--model_path", "/media/rpal/SSD512/John/Control Drop/Reinforcement Learning/src/RL/Training/Checkpoints/TransformerFeatureEncoder/baseline_rl_100000_steps.zip"],
+            "cwd":"${workspaceFolder}",
+            "console":"integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
