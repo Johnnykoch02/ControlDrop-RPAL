@@ -1,0 +1,67 @@
+Metadata-Version: 2.1
+Name: control-dropping-rpal
+Version: 0.0.1
+Summary: Control Dropping RPAL
+Home-page: https://github.com/johnnykoch02/ControlDropping
+Author: 
+Author-email: 
+Keywords: Control Dropping robotics
+Classifier: Development Status :: 3 - Alpha
+Classifier: Intended Audience :: Education
+Classifier: Intended Audience :: Science/Research
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Programming Language :: Python :: 3.8
+Classifier: Programming Language :: Python :: 3.9
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Topic :: Scientific/Engineering
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Classifier: Topic :: Software Development
+Classifier: Topic :: Software Development :: Libraries
+Classifier: Topic :: Software Development :: Libraries :: Python Modules
+Requires-Python: >=3.8
+Requires-Dist: black==24.3.0
+Requires-Dist: charset-normalizer
+Requires-Dist: gym==0.26.2
+Requires-Dist: gymnasium==0.29.1
+Requires-Dist: jax-jumpy==1.0.0
+Requires-Dist: kiwisolver==1.4.5
+Requires-Dist: lazy_loader==0.3
+Requires-Dist: lightning-utilities==0.11.5
+Requires-Dist: matplotlib==3.8.3
+Requires-Dist: mujoco==2.2.0
+Requires-Dist: numpy
+Requires-Dist: opencv-python
+Requires-Dist: pandas
+Requires-Dist: pillow
+Requires-Dist: platformdirs
+Requires-Dist: plotly==5.20.0
+Requires-Dist: prompt-toolkit
+Requires-Dist: protobuf==3.20.3
+Requires-Dist: psutil
+Requires-Dist: ptyprocess
+Requires-Dist: pure-eval
+Requires-Dist: pycparser
+Requires-Dist: pygame==2.5.2
+Requires-Dist: Pygments
+Requires-Dist: PyJWT
+Requires-Dist: pyparsing
+Requires-Dist: python-dateutil
+Requires-Dist: pytorch-lightning==2.3.3
+Requires-Dist: PyYAML
+Requires-Dist: pyzmq
+Requires-Dist: ray==2.22.0
+Requires-Dist: requests
+Requires-Dist: rospy==1.16.0
+Requires-Dist: scikit-image==0.22.0
+Requires-Dist: scikit-learn==1.4.1.post1
+Requires-Dist: scipy==1.12.0
+Requires-Dist: stable_baselines3==2.3.2
+Requires-Dist: sympy
+Requires-Dist: tensorboard
+Requires-Dist: tensordict==0.5.0
+Requires-Dist: torch==2.4.0
+Requires-Dist: torchaudio==2.2.2
+Requires-Dist: torchmetrics
+Requires-Dist: torchrl==0.5.0
+Requires-Dist: torchvision==0.17.2
+Requires-Dist: tqdm==4.66.4

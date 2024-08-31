@@ -1,0 +1,10 @@
+==============================
+/media/rpal/Drive_10TB/John/Control Drop/Reinforcement Learning/src/RL/Training/Checkpoints/TransformerFeatureEncoder/easy_hard_rl_60000_steps.zip
+SceneDifficulty.EASY, 1 Balls: 0.57
+SceneDifficulty.HARD, 1 Balls: 0.40
+SceneDifficulty.HARD, 2 Balls: 0.56
+SceneDifficulty.MEDIUM, 1 Balls: 0.54
+SceneDifficulty.MEDIUM, 2 Balls: 0.36
+SceneDifficulty.HARD, 3 Balls: 0.00
+SceneDifficulty.EASY, 2 Balls: 0.00
+==============================

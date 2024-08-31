@@ -10,10 +10,10 @@
             "justMyCode":false
         },
         {
-            "name": "Python: Module",
+            "name": "Python: Train",
             "type": "python",
             "request": "launch",
-            "program": "Reinforcement Learning/main.py",
+            "program": "control_dropping/train.py",
             "cwd":"${workspaceFolder}",
             "justMyCode": false
         },
@@ -21,8 +21,8 @@
             "name": "Python: Validation",
             "type": "python",
             "request": "launch",
-            "program": "Reinforcement Learning/validation.py",
-            "args": ["--algo", "PPO", "--model_path", "/media/rpal/SSD512/John/Control Drop/Reinforcement Learning/src/RL/Training/Checkpoints/TransformerFeatureEncoder/baseline_rl_100000_steps.zip"],
+            "program": "control_dropping/validation.py",
+            "args": ["--algo", "PPO", "--model_path", "/media/rpal/Drive_10TB/John/Control Drop/control_dropping/src/RL/Training/Checkpoints/TransformerFeatureEncoder/baseline_rl_100000_steps.zip"],
             "cwd":"${workspaceFolder}",
             "console":"integratedTerminal",
             "justMyCode": false

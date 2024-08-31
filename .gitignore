@@ -1,8 +1,11 @@
 *pyc*
-*.npy
+# *.npy
 *.png
-*.npz
+# *.npz
 PythonAPI/
 Checkpoints/
 *.gz
 *tfevents*
+Data_Collection/Grasping_Data_Tianze/
+*.pkl
+
