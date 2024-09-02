@@ -5,8 +5,12 @@ from typing import Dict, List, Optional, Tuple, Any
 import gymnasium as gym
 from gymnasium import spaces
 from gymnasium.spaces import Box
-from control_dropping_rpal.RL.control_dropping_env import BerrettHandGym, T_buffer, base_observation_space
-import math 
+from control_dropping_rpal.RL.control_dropping_env import (
+    BerrettHandGym,
+    T_buffer,
+    base_observation_space,
+)
+import math
 from math import inf
 from torch import nn
 import json
@@ -973,6 +977,7 @@ class MultiModalTransformerFeatureEncoder(BaseFeaturesExtractor):
 # -------------------------- Residual Networks ---------------------------- #
 # ------------------------------------------------------------------------- #
 
+
 class ResidualLayer1D(nn.Module):
     def __init__(self, feature_dim: int, embed_dim=512, dropout_p=0.1):
         super(ResidualLayer1D, self).__init__()
@@ -1014,9 +1019,11 @@ class ResidualBlocks1D(nn.Module):
         out = self.layers(x)
         return out
 
+
 # ------------------------------------------------------------------------- #
 # ---------------- Sinosoudal Positional Encoding ------------------------- #
 # ------------------------------------------------------------------------- #
+
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_length=16):
@@ -1129,9 +1136,11 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
                 self.vec_encoding_size * 2, self.vec_encoding_size, device=self.device
             ),
         )
-        
+
         self.state_attrib_projection = nn.Sequential(
-            nn.Linear(self.state_attrib_dim, self.vec_encoding_size * 2, device=self.device),
+            nn.Linear(
+                self.state_attrib_dim, self.vec_encoding_size * 2, device=self.device
+            ),
             nn.GELU(),
             nn.Linear(
                 self.vec_encoding_size * 2, self.vec_encoding_size, device=self.device
@@ -1225,7 +1234,7 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         palm_tactile : (batch_size, T, embed_dim*)
         obj_location: (batch_size, T, OBJECTS, embed_dim*)
         obj_velocity: (batch_size, T, OBJECTS, embed_dim*)
-        state_attrib: (batch_size, embed_dim*) 
+        state_attrib: (batch_size, embed_dim*)
         state_embedding: zeros_like(batch_size, T, OBJECTS, embed_dim*)
         """
         # with open("./tmp_shape_buffer", "w") as f:
@@ -1299,9 +1308,9 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
 
         # Project Val, Project Spatial Pos, Expand Temporal Pos;
         # Obj Encoding < - temporal enc + val enc + spatial enc
-        
+
         ps_enc = ps_enc[:, 0:T]
-        
+
         ps_enc = ps_enc.unsqueeze(2).expand(B, T, N, embed_dim).to(self.device)
 
         obj_proj_vectors = (
@@ -1311,8 +1320,12 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         ).to(
             self.device
         )  # (B, T, 7, EMBED DIM)
-        
-        state_attributes_tensor = self.state_attrib_projection(observations["state_attrib"].to(self.device)).unsqueeze(dim=1).to(self.device)
+
+        state_attributes_tensor = (
+            self.state_attrib_projection(observations["state_attrib"].to(self.device))
+            .unsqueeze(dim=1)
+            .to(self.device)
+        )
 
         B, T, N, embed_dim = obj_proj_vectors.shape
         obj_proj_vectors = obj_proj_vectors.reshape(B, N * T, embed_dim).to(self.device)
@@ -1322,7 +1335,13 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         )
 
         trf_input_tensor = th.concatenate(
-            [tac_proj_vectors, obj_proj_vectors, state_attributes_tensor, state_output_tensor], dim=1
+            [
+                tac_proj_vectors,
+                obj_proj_vectors,
+                state_attributes_tensor,
+                state_output_tensor,
+            ],
+            dim=1,
         )
 
         if self.use_mask:
@@ -1437,7 +1456,6 @@ class DynamixModel(nn.Module):
             )
 
         self.networks = nn.ModuleDict(modules)
-
 
     def forward(self, obs):
         tac_encoding = self.object_encoder(obs)

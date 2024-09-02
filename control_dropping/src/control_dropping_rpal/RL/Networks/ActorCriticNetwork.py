@@ -17,27 +17,28 @@ from control_dropping_rpal.RL.control_dropping_env import (
 
 
 class ControlDroppingPolicy(nn.Module):
-    def __init__(
-        self,
-        model_config
-    ):
+    def __init__(self, model_config):
         super().__init__()
-        
+
         self.obs_space = base_observation_space
         self.action_space = default_action_space
-        self.num_outputs = np.prod(default_action_space.shape) * 2  # MEAN, STD for i = 1:num_actions)
-        
+        self.num_outputs = (
+            np.prod(default_action_space.shape) * 2
+        )  # MEAN, STD for i = 1:num_actions)
+
         temporal_dim = model_config.get("temporal_dim", T_buffer)
-        obj_encoder_vec_encoding_size = model_config.get("obj_encoder_vec_encoding_size", 8)
+        obj_encoder_vec_encoding_size = model_config.get(
+            "obj_encoder_vec_encoding_size", 8
+        )
         dynamix_num_tsf_layer = model_config.get("obj_encoder_num_tsf_layer", 8)
         obj_encoder_load_path = model_config.get("obj_encoder_load_path", None)
         obj_encoder_freeze_params = model_config.get("obj_encoder_freeze_params", False)
-        
+
         self.device = model_config.get("device", "cpu")
         torch.set_default_device(self.device)
-        
+
         self.gelu = nn.GELU()
-        
+
         self.features = TemporalObjectTactileEncoder_Additive(
             observation_space=self.obs_space,
             device=self.device,
@@ -47,36 +48,39 @@ class ControlDroppingPolicy(nn.Module):
             load_pretrain=False,
             use_mask=True,
         )
-        
+
         if obj_encoder_load_path is not None:
             print("[ControlDroppingPolicy]: loading feature encoder from checkpoint.")
             self.features.load_checkpoint(obj_encoder_load_path)
-            
+
             if obj_encoder_freeze_params:
                 self.features.freeze_parameters()
-        
+
         state_attrib_size = self.obs_space["state_attrib"].shape[0]
         self.estimator = nn.Sequential(
-            nn.Linear(self.features.vec_encoding_size + state_attrib_size, self.features.vec_encoding_size),
+            nn.Linear(
+                self.features.vec_encoding_size + state_attrib_size,
+                self.features.vec_encoding_size,
+            ),
             nn.GELU(),
             nn.Dropout(0.05),
             nn.Linear(self.features.vec_encoding_size, self.features.vec_encoding_size),
             nn.GELU(),
             nn.Dropout(0.05),
         )
-        
+
         self.policy_head = nn.Sequential(
             nn.Linear(self.features.vec_encoding_size, self.features.vec_encoding_size),
             nn.GELU(),
             nn.Linear(self.features.vec_encoding_size, self.num_outputs),
         )
-        
+
         self.value_head = nn.Sequential(
             nn.Linear(self.features.vec_encoding_size, self.features.vec_encoding_size),
             nn.GELU(),
             nn.Linear(self.features.vec_encoding_size, 1),
         )
-        
+
         self.to(self.device)
 
         # Not being used atm:
@@ -109,15 +113,17 @@ class ControlDroppingPolicy(nn.Module):
         # self.lower_feature_dim_cast = nn.Linear(
         #     self.action_output_dim, self.features.object_encoder.flatten_size
         # )
-        
+
     def forward(self, tensordict: TensorDict):
         obs = tensordict.get("observation")
         features = self.features(obs)
-        state_estimation = self.estimator(torch.cat([features, obs["state_attrib"]], dim=1))
-        
+        state_estimation = self.estimator(
+            torch.cat([features, obs["state_attrib"]], dim=1)
+        )
+
         action_params = self.policy_head(state_estimation)
         value = self.value_head(state_estimation)
-        
+
         return TensorDict(
             {
                 "action_params": action_params,

@@ -1,3 +1,6 @@
+import os
+
+CONTROL_DROP_DIR = os.environ["CONTROL_DROP_DIR"]
 import json
 import logging
 import sys
@@ -13,7 +16,6 @@ import pandas as pd
 from sklearn.preprocessing import Normalizer
 
 import concurrent.futures
-import os
 import time
 from collections import OrderedDict
 
@@ -192,7 +194,8 @@ class SimController:
         self.cumulative_velocity = 0
         with open(
             os.path.join(
-                "/media/rpal/Drive_10TB/John/Control Drop/Data_Collection",
+                CONTROL_DROP_DIR,
+                "Data_Collection",
                 "AutoEncoderMeanSTD.json",
             ),
             "r",
@@ -213,7 +216,7 @@ class SimController:
             rot_velocity,
             progress,
         ) = self.load_state_data(
-            "/media/rpal/Drive_10TB/John/Control Drop/Data_Collection/Enviornment_Samples/"
+            os.path.join(CONTROL_DROP_DIR, "Data_Collection/Enviornment_Samples/")
         )
 
         self.normalizers = {

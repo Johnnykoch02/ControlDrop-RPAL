@@ -1,14 +1,18 @@
 import sys
 import os
+
+CONTROL_DROP_DIR = os.environ["CONTROL_DROP_DIR"]
+
 import numpy as np
 import ray
 import logging
 
-sys.path.append("/media/rpal/Drive_10TB/John/Control Drop/control_dropping")
-
-from src.SimController.sim_controller import SensorBuffer, DictSensorBuffer
-from src.RL.control_dropping_env import BerretHandGymRayLibWrapper
-from src.Utils.env_utils import AsyncVectorEnv
+from control_dropping_rpal.SimController.sim_controller import (
+    SensorBuffer,
+    DictSensorBuffer,
+)
+from control_dropping_rpal.RL.control_dropping_env import BerretHandGymRayLibWrapper
+from control_dropping_rpal.Utils.env_utils import AsyncVectorEnv
 
 MOCK_T_BUFFER = 5
 SIZE = 24
@@ -24,9 +28,7 @@ NUM_WORKERS = 8
 ENVS_PER_WORKER = 1
 SAVE_INTERVAL = 2
 NUM_INTERACTIONS = 1000
-CHECKPOINT_DIR = (
-    "/media/rpal/Drive_10TB/John/Control Drop/control_dropping/ray_checkpoints/"
-)
+CHECKPOINT_DIR = os.path.join(CONTROL_DROP_DIR, "control_dropping/ray_checkpoints/")
 
 # Initialize Ray
 ray.init(local_mode=True)

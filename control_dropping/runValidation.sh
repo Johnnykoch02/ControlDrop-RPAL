@@ -1,2 +1,2 @@
 #!/bin/bash
-python Reinforcement\ Learning/validation.py --model_path "/media/rpal/Drive_10TB/John/Control Drop/control_dropping/src/RL/Training/Checkpoints/TransformerFeatureEncoder/GPT-EZ_162500_steps.zip" --algo PPO --use_sbl true
+python Reinforcement\ Learning/validation.py --model_path "${CONTROL_DROP_DIR}/control_dropping/src/RL/Training/Checkpoints/TransformerFeatureEncoder/GPT-EZ_162500_steps.zip" --algo PPO --use_sbl true

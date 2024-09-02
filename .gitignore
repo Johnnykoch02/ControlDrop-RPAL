@@ -9,3 +9,6 @@ Checkpoints/
 Data_Collection/Grasping_Data_Tianze/
 *.pkl
 
+control_dropping/src/control_dropping_rpal.egg-info/
+logs/
+rpal.env

@@ -1,5 +1,8 @@
 # ## Initialization:: Use env stbl3 or raylib
 import os
+
+CONTROL_DROP_DIR = os.environ["CONTROL_DROP_DIR"]
+
 import torch as th
 from ray import tune
 from ray.rllib.algorithms.ppo import PPO, PPOConfig
@@ -39,9 +42,7 @@ NUM_WORKERS = 8
 ENVS_PER_WORKER = 1
 SAVE_INTERVAL = 2
 NUM_INTERACTIONS = 1000
-CHECKPOINT_DIR = (
-    "/media/rpal/Drive_10TB/John/Control Drop/control_droppingheckpoints/"
-)
+CHECKPOINT_DIR = os.path.join(CONTROL_DROP_DIR, "control_dropping/checkpoints/")
 
 # Initialize Ray
 ray.init(local_mode=True)
@@ -122,7 +123,10 @@ config.model = {
         "temporal_dim": T_buffer,
         "obj_encoder_vec_encoding_size": VEC_ENCODING_SIZE,
         "obj_encoder_num_tsf_layer": NUM_LAYERS_TRANSFORMER,
-        "obj_encoder_load_path": f"/media/rpal/Drive_10TB/John/Control Drop/pretrained_object_encoder-{NUM_LAYERS_TRANSFORMER}_layers-{NUM_RESIDUALS}_residuals-{VEC_ENCODING_SIZE}-vecencoding_size-{EPOCHS}_epochs.pt",
+        "obj_encoder_load_path": os.path.join(
+            CONTROL_DROP_DIR,
+            f"pretrained_object_encoder-{NUM_LAYERS_TRANSFORMER}_layers-{NUM_RESIDUALS}_residuals-{VEC_ENCODING_SIZE}-vecencoding_size-{EPOCHS}_epochs.pt",
+        ),
         "device": device,
         "max_seq_len": 1,
     },

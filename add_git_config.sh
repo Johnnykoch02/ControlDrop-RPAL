@@ -1,1 +1,0 @@
-git config --global user.password "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"

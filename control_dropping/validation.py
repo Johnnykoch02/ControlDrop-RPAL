@@ -7,17 +7,15 @@ import subprocess
 import argparse
 import numpy as np
 
-os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 import torch as th
-from src.Utils.network_utils import find_open_port
-from src.Utils.data_utils import plot_results
+from control_dropping_rpal.Utils.network_utils import find_open_port
+from control_dropping_rpal.Utils.data_utils import plot_results
 
 th.manual_seed(42)
 
 # from stable_baselines3.common import env_checker
-# from src.RL.callbacks import TrainAndLoggingCallback
-from src.RL.control_dropping_env import (
+# from control_dropping_rpal.RL.callbacks import TrainAndLoggingCallback
+from control_dropping_rpal.RL.control_dropping_env import (
     BerrettHandGym,
     SceneDifficulty,
     NAME,
@@ -25,7 +23,7 @@ from src.RL.control_dropping_env import (
     LOG_DIR,
     SAVE_FREQ,
 )
-from src.SimController.sim_controller import SimController
+from control_dropping_rpal.SimController.sim_controller import SimController
 from stable_baselines3 import PPO, DDPG
 from sb3_contrib import RecurrentPPO
 import time
@@ -179,9 +177,7 @@ def validate(algo, model_path, use_sbl, data_save_path, plot_val):
         for k, v in Difficulty_Stats.items():
             file_data += f"{k[0]}, {k[1]} Balls: {np.mean(v):.2f}\n"
         file_data += f'{"="*10}' * 3 + "\n"
-        file_num = len(
-            os.listdir(os.path.join("control_dropping", "Validations"))
-        )
+        file_num = len(os.listdir(os.path.join("control_dropping", "Validations")))
 
         os.makedirs(
             os.path.join("control_dropping", "Validations", f"{file_num}"),

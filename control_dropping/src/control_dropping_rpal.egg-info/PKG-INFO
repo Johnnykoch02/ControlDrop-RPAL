@@ -1,5 +1,5 @@
 Metadata-Version: 2.1
-Name: control-dropping-rpal
+Name: control_dropping_rpal
 Version: 0.0.1
 Summary: Control Dropping RPAL
 Home-page: https://github.com/johnnykoch02/ControlDropping
@@ -46,22 +46,22 @@ Requires-Dist: Pygments
 Requires-Dist: PyJWT
 Requires-Dist: pyparsing
 Requires-Dist: python-dateutil
-Requires-Dist: pytorch-lightning==2.3.3
+Requires-Dist: pytorch-lightning
 Requires-Dist: PyYAML
 Requires-Dist: pyzmq
 Requires-Dist: ray==2.22.0
 Requires-Dist: requests
-Requires-Dist: rospy==1.16.0
 Requires-Dist: scikit-image==0.22.0
 Requires-Dist: scikit-learn==1.4.1.post1
 Requires-Dist: scipy==1.12.0
 Requires-Dist: stable_baselines3==2.3.2
 Requires-Dist: sympy
 Requires-Dist: tensorboard
+Requires-Dist: tensorboardX
 Requires-Dist: tensordict==0.5.0
-Requires-Dist: torch==2.4.0
-Requires-Dist: torchaudio==2.2.2
+Requires-Dist: torch
+Requires-Dist: torchaudio
 Requires-Dist: torchmetrics
 Requires-Dist: torchrl==0.5.0
-Requires-Dist: torchvision==0.17.2
+Requires-Dist: torchvision
 Requires-Dist: tqdm==4.66.4

@@ -1,6 +1,9 @@
 import gzip
 import logging
 import os
+
+CONTROL_DROP_DIR = os.environ["CONTROL_DROP_DIR"]
+
 import re
 import subprocess
 import time
@@ -27,7 +30,7 @@ logging.basicConfig(level=logging.INFO)
 NAME = "TransformerFeatureEncoder"
 
 CHECKPOINT_DIR = os.path.join(
-    "/media/rpal/Drive_10TB/John/Control Drop",
+    CONTROL_DROP_DIR,
     "control_dropping",
     "src",
     "RL",
@@ -38,15 +41,13 @@ CHECKPOINT_DIR = os.path.join(
 if not os.path.exists(CHECKPOINT_DIR):
     os.makedirs(CHECKPOINT_DIR)
 
-LOG_DIR = os.path.join(
-    "/media/rpal/Drive_10TB/John/Control Drop", "Training", "Logs", NAME
-)
+LOG_DIR = os.path.join(CONTROL_DROP_DIR, "Training", "Logs", NAME)
 
 
 def create_sim(sim_port, **kwargs) -> subprocess.Popen:
     logging.info(f"Creating SIM on port {sim_port}")
     CMD_ARGS = [
-        f"./start_sim_on_port.sh",
+        f"{CONTROL_DROP_DIR}/scripts/start_sim_on_port.sh",
         f"{sim_port}",
         "--is_gui",
         os.environ.get("SIM_GUI", "false"),
@@ -288,7 +289,7 @@ class BerrettHandGym(gym.Env):
             len_of_dtsve = len(
                 os.listdir(
                     os.path.join(
-                        "/media/rpal/Drive_10TB/John/Control Drop",
+                        CONTROL_DROP_DIR,
                         "Data_Collection",
                         "Model_Performance",
                     )
@@ -296,7 +297,7 @@ class BerrettHandGym(gym.Env):
             )
             self.performance_save_path = (
                 os.path.join(
-                    "/media/rpal/Drive_10TB/John/Control Drop",
+                    CONTROL_DROP_DIR,
                     "Data_Collection",
                     "Model_Performance",
                     f"Trial_{len_of_dtsve}",
@@ -428,7 +429,7 @@ class BerrettHandGym(gym.Env):
     def read_files(self):
         file_name = (
             os.path.join(
-                "/media/rpal/Drive_10TB/John/Control Drop",
+                CONTROL_DROP_DIR,
                 "control_dropping",
                 "src",
                 "RL",
@@ -438,7 +439,7 @@ class BerrettHandGym(gym.Env):
             )
             if self.test
             else os.path.join(
-                "/media/rpal/Drive_10TB/John/Control Drop",
+                CONTROL_DROP_DIR,
                 "control_dropping",
                 "src",
                 "RL",
@@ -464,7 +465,7 @@ class BerrettHandGym(gym.Env):
         data = []
         path = (
             os.path.join(
-                "/media/rpal/Drive_10TB/John/Control Drop",
+                CONTROL_DROP_DIR,
                 "Data_Collection",
                 "Difficultys",
             )
@@ -481,7 +482,7 @@ class BerrettHandGym(gym.Env):
                 self.model_performance[data_srlzation[file]]["use_data"] = True
                 d = np.load(
                     os.path.join(
-                        "/media/rpal/Drive_10TB/John/Control Drop",
+                        CONTROL_DROP_DIR,
                         "Data_Collection",
                         "Difficultys",
                         file,
@@ -496,7 +497,7 @@ class BerrettHandGym(gym.Env):
         """Loads a cluster index from the data path."""
         return np.load(
             os.path.join(
-                "/media/rpal/Drive_10TB/John/Control Drop",
+                CONTROL_DROP_DIR,
                 "Data_Collection",
                 "Clusters",
                 f"{cluster_id}.npy",
@@ -874,14 +875,12 @@ class BerrettHandGym(gym.Env):
         for f in model_files:
             most_recent_model = max(
                 model_files,
-                key=lambda f: os.path.getctime(
-                    os.path.join("/media/rpal/Drive_10TB/John/Control Drop", f)
-                ),
+                key=lambda f: os.path.getctime(os.path.join(CONTROL_DROP_DIR, f)),
             )
         _args = [
             "python",
             os.path.join(
-                "/media/rpal/Drive_10TB/John/Control Drop",
+                CONTROL_DROP_DIR,
                 "control_dropping",
                 "validation.py",
             ),
