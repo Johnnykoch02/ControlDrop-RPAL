@@ -21,7 +21,8 @@ import torch as th
 import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import CosineAnnealingLR
+from torch.optim.lr_scheduler import CosineAnnealingLR, LinearLR, SequentialLR
+
 from torch.nn.utils import clip_grad_norm_
 from torch.utils.data import DataLoader
 from torch.utils.data import Dataset
@@ -146,8 +147,8 @@ state_space = {
 }
 
 # Params
-NUM_LAYERS_TRANSFORMER = 8
-NUM_RESIDUALS = 8
+NUM_LAYERS_TRANSFORMER = 12
+NUM_RESIDUALS = 3
 EPOCHS = 1000
 VEC_ENCODING_SIZE = 512
 
@@ -168,22 +169,43 @@ MODEL_ARGS = {
 # Use huggingface model
 # Model Predictive Control: Accuracy (1)
 #
+# key_losses_dynamix = {
+#     "palm_tactile": lambda y_pred, y_target: 1
+#     - F.cosine_similarity(y_pred, y_target).mean(),
+#     "finger_1_tactile": lambda y_pred, y_target: 1
+#     - F.cosine_similarity(y_pred, y_target).mean(),
+#     "finger_2_tactile": lambda y_pred, y_target: 1
+#     - F.cosine_similarity(y_pred, y_target).mean(),
+#     "finger_3_tactile": lambda y_pred, y_target: 1
+#     - F.cosine_similarity(y_pred, y_target).mean(),
+#     "palm_location": lambda y_pred, y_target: torch.zeros_like(
+#         F.mse_loss(y_pred, y_target)
+#     ),  # F.mse_loss(y_pred, y_target),
+#     "finger_1_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+#     "finger_2_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+#     "finger_3_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+#     "obj_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+#     "obj_count": lambda y_pred, y_target: F.cross_entropy(y_pred, y_target),
+#     "reward": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+# }
+
+# key_losses_critiq = {
+#     "action": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+#     "reward": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+# }
+
 key_losses_dynamix = {
-    "palm_tactile": lambda y_pred, y_target: 1
-    - F.cosine_similarity(y_pred, y_target).mean(),
-    "finger_1_tactile": lambda y_pred, y_target: 1
-    - F.cosine_similarity(y_pred, y_target).mean(),
-    "finger_2_tactile": lambda y_pred, y_target: 1
-    - F.cosine_similarity(y_pred, y_target).mean(),
-    "finger_3_tactile": lambda y_pred, y_target: 1
-    - F.cosine_similarity(y_pred, y_target).mean(),
+    "palm_tactile": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+    "finger_1_tactile": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+    "finger_2_tactile": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+    "finger_3_tactile": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
     "palm_location": lambda y_pred, y_target: torch.zeros_like(
         F.mse_loss(y_pred, y_target)
     ),  # F.mse_loss(y_pred, y_target),
-    "finger_1_location": lambda y_pred, y_target: F.smooth_l1_loss(y_pred, y_target),
-    "finger_2_location": lambda y_pred, y_target: F.smooth_l1_loss(y_pred, y_target),
-    "finger_3_location": lambda y_pred, y_target: F.smooth_l1_loss(y_pred, y_target),
-    "obj_location": lambda y_pred, y_target: F.smooth_l1_loss(y_pred, y_target),
+    "finger_1_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+    "finger_2_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+    "finger_3_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
+    "obj_location": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
     "obj_count": lambda y_pred, y_target: F.cross_entropy(y_pred, y_target),
     "reward": lambda y_pred, y_target: F.mse_loss(y_pred, y_target),
 }
@@ -204,18 +226,33 @@ def get_args():
     parser.add_argument('--warmup_epochs', type=int, default=5, help='Number of warmup epochs')
     parser.add_argument('--num_workers', type=int, default=4, help='Number of data loading workers')
     parser.add_argument('--world_size', type=int, default=1, help='Number of processes for distributed training')
+    parser.add_argument('--lr_scheduler', type=str, default='cosine', choices=['cosine', 'linear', 'constant'], help='Learning rate scheduler')
+    parser.add_argument('--min_lr', type=float, default=1e-6, help='Minimum learning rate for cosine annealing')
+    parser.add_argument('--clip_grad_norm', type=float, default=None, help='grad norm clip (try 2.0)')
     args = parser.parse_args()
     setattr(args, "distributed", min(args.world_size, torch.cuda.device_count()) > 1)
     return args
 
-
-def get_optimizer(models, args):
+def get_optimizer_and_scheduler(models, args):
     params = list(models[0].parameters()) + list(models[1].parameters())
     if args.optimizer == 'adam':
-        return optim.Adam(params, lr=args.lr)
+        optimizer = torch.optim.Adam(params, lr=args.lr)
     elif args.optimizer == 'sgd':
-        return optim.SGD(params, lr=args.lr, momentum=0.9)
+        optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9)
 
+    if args.lr_scheduler == 'constant':
+        return optimizer, None
+
+    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=args.warmup_epochs)
+
+    if args.lr_scheduler == 'cosine':
+        main_scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs - args.warmup_epochs, eta_min=args.min_lr)
+    elif args.lr_scheduler == 'linear':
+        main_scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=args.epochs - args.warmup_epochs)
+
+    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, main_scheduler], milestones=[args.warmup_epochs])
+
+    return optimizer, scheduler
 
 def make_dynamix_and_predictor(
     model_args: Dict[str, Any]
@@ -296,7 +333,7 @@ class DynamixCritiqLoss(nn.Module):
         ).sum()
 
         return {
-            "dynamix": dynamix_loss, "critiq_loss": critiq_loss
+            "dynamix_loss": dynamix_loss, "critiq_loss": critiq_loss
         }
     
 
@@ -328,12 +365,13 @@ class DynamixCritiqValidation(nn.Module):
         ).sum()
 
         correct = th.argmax(dynamix_target["obj_count"], dim=1) == th.argmax(
-            F.softmax(dynamix_preds["obj_count"]), dim=1
+            dynamix_preds["obj_count"], dim=1
         )
         obj_count_accuracy = sum(correct.int()) / len(correct)
+        print("obj cnt acc:", obj_count_accuracy)
 
         return {
-            "dynamix": dynamix_loss, "critiq_loss": critiq_loss, "obj_count_accuracy": obj_count_accuracy
+            "dynamix_loss": dynamix_loss, "critiq_loss": critiq_loss, "obj_count_accuracy": obj_count_accuracy
         }
 
 def train_one_epoch(models, train_loader, optimizer, criterion, device, epoch, writer):
@@ -365,9 +403,19 @@ def train_one_epoch(models, train_loader, optimizer, criterion, device, epoch, w
                 if loss_key not in loss_info:
                     loss_info[loss_key] = 0
                 loss_info[loss_key] += loss_value.item()
+                loss_value.backward()
             loss = sum(loss.values())
+        else:
+            loss.backward()
 
-        loss.backward()
+        # loss.backward()
+
+        if args.clip_grad_norm:
+            clip_grad_norm_(dynamix_model.parameters(), args.clip_grad_norm)
+            clip_grad_norm_(critiq_model.parameters(), args.clip_grad_norm)
+
+
+
         optimizer.step()
 
         total_loss += loss.item()
@@ -401,8 +449,8 @@ def validate(models, val_loader, criterion, device, epoch, writer):
             critiq_n_state = {k: v.to(device) for k, v in critiq_n_state.items()}
             critiq_target = {k: v.to(device) for k, v in critiq_target.items()}
 
-            dynamix_pred = dynamix_model(dynamix_data)
-            critiq_pred = critiq_model(critiq_state, critiq_n_state)
+            dynamix_pred = dynamix_model(dynamix_data, is_val=True)
+            critiq_pred = critiq_model(critiq_state, critiq_n_state, is_val=True)
 
             loss = criterion(dynamix_pred, dynamix_target, critiq_pred, critiq_target)
             if isinstance(loss, dict):
@@ -440,6 +488,7 @@ def train(rank, world_size, args):
         critiq_model = critiq_model.to(device)
     
     models = (dynamix_model, critiq_model)
+    optimizer, scheduler = get_optimizer_and_scheduler(models, args)
     
     train_dataset, val_dataset = get_joint_dataset(PATH_DYNAMIX, PATH_CRITIQ)
     
@@ -452,14 +501,15 @@ def train(rank, world_size, args):
     val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False,
                             num_workers=args.num_workers, sampler=val_sampler)
     
-    optimizer = get_optimizer(models, args)
+    
+
     train_criterion = DynamixCritiqLoss()
     val_criterion = DynamixCritiqValidation()
 
     log_dir = os.path.join('./logs', args.name)
-    if os.path.exists(os.path.join(log_dir, 'checkpoints')):
-        experiment_cnt = len([i for i in os.listdir(log_dir) if i.startswith(args.name)])
-        log_dir = os.path.join('./logs', f"{args.name}_{experiment_cnt}")
+    if os.path.exists(os.path.join(log_dir)):
+        experiment_cnt = len([i for i in os.listdir("./logs") if i.startswith(args.name)])
+        log_dir = os.path.join('./logs', f"{args.name}_{experiment_cnt+1}")
         logging.warn(f"{args.name} already exists, new logging directory: {log_dir}")
     writer = SummaryWriter(log_dir=os.path.join(log_dir, 'tensorboard')) if rank == 0 else None
 
@@ -493,6 +543,14 @@ def train(rank, world_size, args):
             logging.info(train_log)
             logging.info(val_log)
             logging.info("-"*25)
+        
+        if scheduler:
+            scheduler.step()
+            if rank == 0:
+                writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], epoch)
+
+
+
 
     if args.distributed:
         cleanup()
