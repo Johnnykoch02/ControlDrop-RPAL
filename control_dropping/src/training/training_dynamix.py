@@ -44,7 +44,6 @@ import torch.distributed as dist
 from tensorboardX import SummaryWriter
 from tqdm import tqdm
 
-torch.set_float32_matmul_precision("medium")
 
 ## Model for predictions
 from control_dropping_rpal.RL.Networks.ExtractorNetworks import (
@@ -367,7 +366,7 @@ class DynamixCritiqValidation(nn.Module):
         correct = th.argmax(dynamix_target["obj_count"], dim=1) == th.argmax(
             dynamix_preds["obj_count"], dim=1
         )
-        obj_count_accuracy = sum(correct.int()) / len(correct)
+        obj_count_accuracy = sum(correct.int()) / correct.size(0)
         print("obj cnt acc:", obj_count_accuracy)
 
         return {
