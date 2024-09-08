@@ -8,6 +8,6 @@ python '/home/blazekin/dev/ControlDrop-RPAL/control_dropping/src/training/traini
   --epochs 500 \
   --warmup_epochs 10 \
   --num_workers 12 \
-  --lr 0.0005 \
+  --lr 0.005 \
   --clip_grad_norm 2.0
   

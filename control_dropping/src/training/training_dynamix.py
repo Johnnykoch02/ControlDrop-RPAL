@@ -317,8 +317,8 @@ class DynamixCritiqLoss(nn.Module):
     ):
         dynamix_loss = th.stack(
             [
-                key_losses_critiq[key](dynamix_preds[key], dynamix_target[key])
-                for key in critiq_target.keys() 
+                key_losses_dynamix[key](dynamix_preds[key], dynamix_target[key])
+                for key in dynamix_target.keys() 
                 if key in dynamix_preds and key in dynamix_target
             ]
         ).sum()
@@ -366,8 +366,8 @@ class DynamixCritiqValidation(nn.Module):
         correct = th.argmax(dynamix_target["obj_count"], dim=1) == th.argmax(
             dynamix_preds["obj_count"], dim=1
         )
-        obj_count_accuracy = sum(correct.int()) / correct.size(0)
-        print("obj cnt acc:", obj_count_accuracy)
+        obj_count_accuracy = correct.int().sum() / correct.size(0)
+        print("[DBG] obj cnt acc:", obj_count_accuracy, correct.shape)
 
         return {
             "dynamix_loss": dynamix_loss, "critiq_loss": critiq_loss, "obj_count_accuracy": obj_count_accuracy
@@ -402,18 +402,13 @@ def train_one_epoch(models, train_loader, optimizer, criterion, device, epoch, w
                 if loss_key not in loss_info:
                     loss_info[loss_key] = 0
                 loss_info[loss_key] += loss_value.item()
-                loss_value.backward()
             loss = sum(loss.values())
-        else:
-            loss.backward()
-
-        # loss.backward()
+        
+        loss.backward()
 
         if args.clip_grad_norm:
             clip_grad_norm_(dynamix_model.parameters(), args.clip_grad_norm)
             clip_grad_norm_(critiq_model.parameters(), args.clip_grad_norm)
-
-
 
         optimizer.step()
 
