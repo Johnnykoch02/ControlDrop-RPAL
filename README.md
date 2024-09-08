@@ -54,8 +54,8 @@ Next, you'll need to set up a Conda environment with Python 3.10 or higher and i
  - [Critiq Data](https://drive.google.com/file/d/1cw6r8nK05H7W5JEBsY8f7tcb0lRUrn2q/view?usp=sharing)
 
 2. Setup the correct directory structure:
- - Extract the Dynamix data to `ControlDrop-RPAL/Data_Collection/Time_Dependent_Samples_4/
- - Extract the Critiq data to `ControlDrop-RPAL/Data_Collection/Action_Pred_Time_Dependent_Samples_4/
+ - Extract the Dynamix data to `ControlDrop-RPAL/Data_Collection/Time_Dependent_Samples_4/`
+ - Extract the Critiq data to `ControlDrop-RPAL/Data_Collection/Action_Pred_Time_Dependent_Samples_4/`
 
 3. Run `scripts/train_dynamix_critiq.sh`:
 
