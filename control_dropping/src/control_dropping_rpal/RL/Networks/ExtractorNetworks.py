@@ -1049,6 +1049,38 @@ class PositionalEncoding(nn.Module):
         x = self.pe[: self.max_length, :].unsqueeze(0)
         return x
 
+# -------------------------------------------------------------- #
+# ---------------- Query Pooling Layer ------------------------- #
+# -------------------------------------------------------------- #
+
+
+class QueryPoolingLayer(nn.Module):
+    def __init__(self, embed_dim: int, num_queries:int):
+        super(QueryPoolingLayer, self).__init__()
+        self.num_queries = num_queries
+        self.queries = nn.Parameter(th.randn(num_queries, embed_dim))  # Learnable queries
+        self.fc = nn.Linear(embed_dim, embed_dim)  # Fully connected layer to transform queries
+
+    def forward(self, x):
+        # x: (B, N, embed_dim)
+        B, N, embed_dim = x.shape
+        
+        # Apply the fully connected layer to queries
+        queries = self.fc(self.queries)  # (num_queries, embed_dim)
+        
+        # Calculate attention scores (unnormalized dot product attention)
+        attention_scores = th.einsum('bnd,qd->bnq', x, queries)  # (B, N, num_queries)
+        
+        # Softmax to get attention weights
+        attention_weights = th.softmax(attention_scores, dim=1)  # (B, N, num_queries)
+        
+        # Apply attention weights to the input and sum over N
+        pooled_output = th.einsum('bnd,bnq->bqd', x, attention_weights)  # (B, num_queries, embed_dim)
+        
+        # Mean the result across the num_queries dimension
+        pooled_output = pooled_output.mean(dim=1)  # (B, embed_dim)
+        
+        return pooled_output
 
 # ------------------------------------------------------------------------- #
 # ----------------- TemporalObjectTactileEncoder_Additive ----------------- #
@@ -1151,15 +1183,22 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         transformer_layer = nn.TransformerEncoderLayer(
             batch_first=True,
             d_model=self.vec_encoding_size,
+            activation=F.gelu,
             nhead=4,
-            dim_feedforward=256,  # TODO: make modular
+            dim_feedforward=4 * self.vec_encoding_size,  # TODO: make modular
             dropout=0.08,
+            bias=False,
             device=self.device,
         )
         self.trns_encoder = nn.TransformerEncoder(
             transformer_layer,
             num_layers=num_tsf_layer,
         )
+        self.pooling = QueryPoolingLayer(
+            embed_dim=self.vec_encoding_size,
+            num_queries=256,
+        )
+
         self.output_shape = (
             1,
             self.observation_space["obj_velocity"].shape[0] + len(self.tactile_values),
@@ -1222,7 +1261,10 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
 
         return observations
 
-    def preprocess_observations(self, observations):
+    def preprocess_observations(self, 
+                                observations, 
+                                query_tensor: Optional[th.Tensor]=None,
+                                is_val=False):
         """Input Dict Tensor for the Transformer:
         finger_1_location: (batch_size, T, embed_dim*)
         finger_2_location: (batch_size, T, embed_dim*)
@@ -1330,35 +1372,43 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         B, T, N, embed_dim = obj_proj_vectors.shape
         obj_proj_vectors = obj_proj_vectors.reshape(B, N * T, embed_dim).to(self.device)
 
-        state_output_tensor = (
+        state_query_tensor = (
             th.zeros_like(tac_proj_vectors[:, 0, :]).unsqueeze(dim=1).to(self.device)
-        )
+        ) if query_tensor is None else query_tensor.expand(B, 1, embed_dim).contiguous()
 
         trf_input_tensor = th.concatenate(
             [
                 tac_proj_vectors,
                 obj_proj_vectors,
                 state_attributes_tensor,
-                state_output_tensor,
+                state_query_tensor,
             ],
             dim=1,
         )
 
-        if self.use_mask:
+        if self.use_mask and not is_val:
             trf_input_tensor = self.apply_random_mask(trf_input_tensor)
 
         trf_input_tensor = trf_input_tensor.to(self.device)
 
         return trf_input_tensor
 
-    def forward(self, observations) -> th.Tensor:
+    def forward(self, 
+                observations,
+                query_tensor: Optional[th.Tensor]=None, 
+                is_val=False) -> th.Tensor:
 
-        trf_input_tensor = self.preprocess_observations(observations)
+        trf_input_tensor = self.preprocess_observations(
+            observations,
+            query_tensor=query_tensor, 
+            is_val=is_val
+            )
 
         trf_output = self.trns_encoder(trf_input_tensor)
         trf_output = th.nan_to_num(trf_output)
 
         state_representation_tnsor = trf_output[:, -1, :]
+        # state_representation_tnsor = self.pooling(trf_output)
 
         return state_representation_tnsor
 
@@ -1410,6 +1460,7 @@ class DynamixModel(nn.Module):
     ):
         super(DynamixModel, self).__init__()
         self.device = device
+        self.vec_encoding_size = vec_encoding_size
         self.to(self.device)
 
         self.object_encoder = (
@@ -1432,15 +1483,34 @@ class DynamixModel(nn.Module):
         self.activation = nn.GELU
         self.join_keys = ["action"]
 
+        self.query_tensor = th.nn.Parameter(th.randn(1, 1, vec_encoding_size))
         self.delta_state_network = nn.Sequential(
             # CAST
+            nn.Linear(vec_encoding_size + 5, vec_encoding_size * 2),
+            # lambda x: 
             ResidualBlocks1D(
-                feature_dim=vec_encoding_size + 5,
+                feature_dim=vec_encoding_size * 2,
                 num_blocks=num_residual_blocks,
                 embed_dim=embed_dim_high,
             ),
             # GATING
-            nn.Linear(vec_encoding_size + 5, vec_encoding_size),
+            nn.Linear(vec_encoding_size * 2, vec_encoding_size),
+        )
+
+
+        self.bn_embedding = nn.LayerNorm(vec_encoding_size)
+        self.bn_delta = nn.LayerNorm(vec_encoding_size)
+
+        self.predictor = nn.Sequential(
+            # Recieves Delta State
+            ResidualBlocks1D(
+                feature_dim=vec_encoding_size * 2,
+                num_blocks=5,
+                embed_dim=embed_dim_high,
+            ),
+            nn.Linear(vec_encoding_size * 2, vec_encoding_size),
+            self.activation(),
+            nn.Dropout(p=dropout_prob),
         )
 
         modules = {}
@@ -1457,9 +1527,10 @@ class DynamixModel(nn.Module):
 
         self.networks = nn.ModuleDict(modules)
 
-    def forward(self, obs):
-        tac_encoding = self.object_encoder(obs)
+    def forward(self, obs, is_val=False):
+        tac_encoding = self.object_encoder(obs, is_val=is_val)
         tac_encoding = tac_encoding.view((tac_encoding.shape[0], -1))
+        # tac_encoding = self.bn_embedding(tac_encoding)
         cat_tensor = th.concatenate([tac_encoding, obs["action"]], dim=1).to(
             self.device
         )
@@ -1470,7 +1541,11 @@ class DynamixModel(nn.Module):
         # Or critiq model is trying to find a relationship between one state embedding and another state embedding to produce an action and a reward
         # Here we are trying to find the delta between our original state and the new state
         # caused by the action such that we can predict it
+        # embed_tnsor = self.bn_delta(state_delta + tac_encoding)
         embed_tnsor = state_delta + tac_encoding
+
+        # cat_tensor = th.cat([embed_tnsor, state_delta], dim=1).to(self.device)
+        # n_state_preds = self.predictor(cat_tensor).to(self.device)
 
         # Benifets: I can take a state at T[0] and pass S[0] through our network to
         # obtain an embedding e_0
@@ -1479,9 +1554,10 @@ class DynamixModel(nn.Module):
         # Hence, this modeling scheme is powerful if future trajectories can be reliably obtained in the embedding space of S
 
         # TODO: Test Utitlity
-        # embed_tnsor = F.normalize(F.tanh(state_delta) + F.sigmoid(tac_encoding), eps=1e-7) #TODO: Test Utitlity
+        # embed_tnsor = F.tanh(state_delta) + F.sigmoid(tac_encoding) #TODO: Test Utitlity
         # embed_tnsor = F.tanh((state_delta + tac_encoding ) * (1 / self.object_encoder.vec_encoding_size**0.5))
         # embed_tnsor = state_delta
+        # embed_tnsor = self.bn_delta(state_delta + tac_encoding)
 
         logit_map = {k: net(embed_tnsor) for k, net in self.networks.items()}
         return logit_map
@@ -1526,6 +1602,7 @@ class CritiqModel(nn.Module):
         super(CritiqModel, self).__init__()
         self.device = device
         self.to(self.device)
+        self.vec_encoding_size = vec_encoding_size
 
         self.object_encoder = (
             encoder
@@ -1547,6 +1624,7 @@ class CritiqModel(nn.Module):
         self.activation = nn.GELU
         self.join_keys = ["action"]
 
+        self.query_tensor = th.nn.Parameter(th.randn(1, 1, vec_encoding_size))
         self.predictor = nn.Sequential(
             # Recieves Delta State
             ResidualBlocks1D(
@@ -1558,14 +1636,8 @@ class CritiqModel(nn.Module):
             self.activation(),
             nn.Dropout(p=dropout_prob),
         )
-
-        # Time estimation:
-        self.time_estimator = nn.Sequential(
-            # Recieves Delta State
-            nn.Linear(vec_encoding_size, vec_encoding_size),
-            self.activation(),
-            nn.Linear(vec_encoding_size, 1),
-        )
+        self.bn_embedding = nn.LayerNorm(vec_encoding_size)
+        self.bn_delta = nn.LayerNorm(vec_encoding_size)
 
         modules = {}
         for k, size in PRED_OUTPUT_SIZES_DICT.items():
@@ -1581,17 +1653,21 @@ class CritiqModel(nn.Module):
 
         self.networks = nn.ModuleDict(modules)
 
-    def forward(self, state, n_state):
+    def forward(self, state, n_state, is_val=False):
         # Feed forward S[T] and S[T+1]
-        embed_state = self.object_encoder(state)
-        n_embed_state = self.object_encoder(n_state)
+        embed_state = self.object_encoder(state, is_val=is_val)
+        n_embed_state = self.object_encoder(n_state, is_val=is_val)
         embed_state = embed_state.view((embed_state.shape[0], -1))
         n_embed_state = n_embed_state.view((n_embed_state.shape[0], -1))
+
+        # embed_state = self.bn_embedding(embed_state)
+        # n_embed_state = self.bn_embedding(n_embed_state)
 
         # We obtain a delta
         delta_state = n_embed_state - embed_state
         # delta_estimation = (1 / self.time_estimator(embed_state)) * self.predictor(delta_state)
-        delta_concat = th.cat([embed_state, delta_state], dim=1).to(self.device)
+        # delta_concat = th.cat([embed_state, delta_state], dim=1).to(self.device)
+        delta_concat = th.cat([n_embed_state, delta_state], dim=1).to(self.device)
 
         delta_estimation = self.predictor(delta_concat)
 
