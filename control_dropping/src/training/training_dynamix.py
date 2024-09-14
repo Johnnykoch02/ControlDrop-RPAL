@@ -318,7 +318,7 @@ class DynamixCritiqLoss(nn.Module):
         dynamix_loss = th.stack(
             [
                 key_losses_dynamix[key](dynamix_preds[key], dynamix_target[key])
-                for key in dynamix_target.keys() 
+                for key in key_losses_dynamix.keys() 
                 if key in dynamix_preds and key in dynamix_target
             ]
         ).sum()
@@ -326,7 +326,7 @@ class DynamixCritiqLoss(nn.Module):
         critiq_loss = th.stack(
             [
                 key_losses_critiq[key](critiq_preds[key], critiq_target[key])
-                for key in critiq_target.keys() 
+                for key in key_losses_critiq.keys() 
                 if key in critiq_preds and key in critiq_target
             ]
         ).sum()
@@ -349,8 +349,8 @@ class DynamixCritiqValidation(nn.Module):
     ):
         dynamix_loss = th.stack(
             [
-                key_losses_critiq[key](dynamix_preds[key], dynamix_target[key])
-                for key in critiq_target.keys() 
+                key_losses_dynamix[key](dynamix_preds[key], dynamix_target[key])
+                for key in key_losses_dynamix.keys() 
                 if key in dynamix_preds and key in dynamix_target
             ]
         ).sum()
@@ -358,7 +358,7 @@ class DynamixCritiqValidation(nn.Module):
         critiq_loss = th.stack(
             [
                 key_losses_critiq[key](critiq_preds[key], critiq_target[key])
-                for key in critiq_target.keys() 
+                for key in key_losses_critiq.keys() 
                 if key in critiq_preds and key in critiq_target
             ]
         ).sum()
