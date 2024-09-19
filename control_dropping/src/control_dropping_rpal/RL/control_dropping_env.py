@@ -21,7 +21,7 @@ from gymnasium.spaces import Box, Dict, Discrete, MultiDiscrete
 
 from control_dropping_rpal.Utils.network_utils import find_open_port
 
-from control_dropping_rpal.SimController import SimController
+from control_dropping_rpal.SimController import SimController, SensorBuffer
 from control_dropping_rpal.Utils.data_utils import plot_results
 
 logging.basicConfig(level=logging.INFO)
@@ -760,7 +760,7 @@ class BerrettHandGym(gym.Env):
             else (hand_ke * self.movement_penalty_scale_factor + cum_velocity) ** 2
         )
         penalty = (
-            -0.2
+            -2
             + sum(self.simController.get_limit_signals()) / 2
             + sum(terminations)
             + (palm_displacement)  # Pain
@@ -902,14 +902,16 @@ class BerrettHandGym(gym.Env):
 
 
 class BerretHandGymRayLibWrapper(gym.Env):
-    def __init__(self, config):  # config is of type EnvContext
+    def __init__(self, config=None):
         super().__init__()
-        self._observation_space = base_observation_space
-        self._action_space = default_action_space
+        if config is None:
+            config = {}
 
         self.cfg = config
-        self.episode_len = 250
+        self.episode_len = 100
+        self.current_step = 0
 
+        # Initialize the agent (your custom simulator)
         self.agent = BerrettHandGym(
             test=config.get("test", False),
             cluster_index=config.get("cluster_index", 3),
@@ -927,32 +929,50 @@ class BerretHandGymRayLibWrapper(gym.Env):
             ),
             algorithm=config.get("algorithm", "RecurrentPPO"),
             is_val=config.get("is_val", False),
-            worker_idx=self.cfg.get("worker_idx"),
+            worker_idx=config.get("worker_idx"),
         )
 
-        if self.cfg.get("worker_idx") == 0:
-            # Perform specific actions for worker 0
-            pass
+        self.action_buffer = SensorBuffer(
+            name="action_buffer",
+            data_shape=(5,),  # Assuming actions are 5-dimensional
+            time_seq_len=8,  # Store 8 previous actions
+            update_fnc=self._update_action_buffer,
+        )
 
-        # self.action_space = self.agent.action_space
-        # self.observation_space = self.agent.observation_space
-        # print("env obs:", self.observation_space)
+        # Define action and observation spaces
+        self._action_space = self.agent.action_space
+        self._observation_space = self.agent.observation_space
+
+        self.current_action = np.zeros(5)
+
+    def _update_action_buffer(self):
+        return self.current_action
 
     def reset(self, *, seed=None, options=None):
+        super().reset(seed=seed)
+        self.current_action = np.zeros(5)
+        self.current_step = 0
         obs, info = self.agent.reset()
+        self.action_buffer.reset_sensor()
 
-        return obs, info
+        obs["actions"] = self.action_buffer.get_updated_sensor_reading()
+        return obs, info  # Gym API expects only obs, not (obs, info)
 
-    def step(self, action, *args, **kwargs):
+    def step(self, action):
+        self.current_action = action
         obs, reward, done, info = self.agent.step(action)
-        terminated = truncated = self.agent.step_len > self.episode_len or done
+        obs["actions"] = self.action_buffer.get_updated_sensor_reading()
+
+        self.current_step += 1
+        terminated = done
+        truncated = self.current_step >= self.episode_len
         return obs, reward, terminated, truncated, info
 
     def render(self, mode="human"):
-        return self.env.render(mode)
+        pass
 
     def close(self):
-        self.env.close()
+        self.agent.close()
 
     @property
     def observation_space(self) -> gym.Space:

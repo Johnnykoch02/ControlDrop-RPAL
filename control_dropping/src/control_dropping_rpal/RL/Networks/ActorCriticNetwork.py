@@ -1,7 +1,8 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from torchrl.modules import TensorDictModule, ProbabilisticActor, ValueOperator
+
+
 from tensordict.tensordict import TensorDict
 
 from control_dropping_rpal.RL.Networks.ExtractorNetworks import (
@@ -13,31 +14,46 @@ from control_dropping_rpal.RL.control_dropping_env import (
     T_buffer,
 )
 
+from stable_baselines3.common.policies import ActorCriticPolicy
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+from torch.distributions import Normal
+
+from control_dropping_rpal.Utils.env_utils import is_vectorized_observation
+
 # TODO: There is an issue using the observation space and action space inside of the ActorCriticNetwork. What we should do is fix this ASAP. For now it is hard coded.
 
 
-class ControlDroppingPolicy(nn.Module):
-    def __init__(self, model_config):
-        super().__init__()
+class ControlDropPolicy(ActorCriticPolicy):
+    def __init__(
+        self, observation_space, action_space, lr_schedule, model_config=None, **kwargs
+    ):
+        self.model_config = model_config if model_config is not None else {}
 
+        # Initialize device before calling super().__init__()
+        # self.device = self.model_config.get("device", "auto")
+
+        super().__init__(observation_space, action_space, lr_schedule, **kwargs)
+
+        self._device = None
+
+        # Initialize the policy components
+        self._init_policy_components()
+
+    def _init_policy_components(self):
+        # Initialize components from the original ControlDroppingPolicy
         self.obs_space = base_observation_space
         self.action_space = default_action_space
-        self.num_outputs = (
-            np.prod(default_action_space.shape) * 2
-        )  # MEAN, STD for i = 1:num_actions)
+        self.num_outputs = np.prod(default_action_space.shape) * 2
 
-        temporal_dim = model_config.get("temporal_dim", T_buffer)
-        obj_encoder_vec_encoding_size = model_config.get(
+        temporal_dim = self.model_config.get("temporal_dim", T_buffer)
+        obj_encoder_vec_encoding_size = self.model_config.get(
             "obj_encoder_vec_encoding_size", 8
         )
-        dynamix_num_tsf_layer = model_config.get("obj_encoder_num_tsf_layer", 8)
-        obj_encoder_load_path = model_config.get("obj_encoder_load_path", None)
-        obj_encoder_freeze_params = model_config.get("obj_encoder_freeze_params", False)
-
-        self.device = model_config.get("device", "cpu")
-        torch.set_default_device(self.device)
-
-        self.gelu = nn.GELU()
+        dynamix_num_tsf_layer = self.model_config.get("obj_encoder_num_tsf_layer", 8)
+        obj_encoder_load_path = self.model_config.get("obj_encoder_load_path", None)
+        obj_encoder_freeze_params = self.model_config.get(
+            "obj_encoder_freeze_params", False
+        )
 
         self.features = TemporalObjectTactileEncoder_Additive(
             observation_space=self.obs_space,
@@ -50,18 +66,25 @@ class ControlDroppingPolicy(nn.Module):
         )
 
         if obj_encoder_load_path is not None:
-            print("[ControlDroppingPolicy]: loading feature encoder from checkpoint.")
+            print("[ControlDropPolicy]: loading feature encoder from checkpoint.")
             self.features.load_checkpoint(obj_encoder_load_path)
-
             if obj_encoder_freeze_params:
                 self.features.freeze_parameters()
 
-        state_attrib_size = self.obs_space["state_attrib"].shape[0]
+        # state_attrib_size = self.obs_space["state_attrib"].shape[0]
+        # self.estimator = nn.Sequential(
+        #     nn.Linear(self.features.vec_encoding_size + state_attrib_size, self.features.vec_encoding_size),
+        #     nn.GELU(),
+        #     nn.Dropout(0.05),
+        #     nn.Linear(self.features.vec_encoding_size, self.features.vec_encoding_size),
+        #     nn.GELU(),
+        #     nn.Dropout(0.05),
+        # )
+        _actions_projected_size = 64
+        self.action_projector = nn.Linear(40, _actions_projected_size)  # Projecting from 40 to 64
+
         self.estimator = nn.Sequential(
-            nn.Linear(
-                self.features.vec_encoding_size + state_attrib_size,
-                self.features.vec_encoding_size,
-            ),
+            nn.Linear(self.features.vec_encoding_size + _actions_projected_size, self.features.vec_encoding_size),
             nn.GELU(),
             nn.Dropout(0.05),
             nn.Linear(self.features.vec_encoding_size, self.features.vec_encoding_size),
@@ -72,7 +95,10 @@ class ControlDroppingPolicy(nn.Module):
         self.policy_head = nn.Sequential(
             nn.Linear(self.features.vec_encoding_size, self.features.vec_encoding_size),
             nn.GELU(),
-            nn.Linear(self.features.vec_encoding_size, self.num_outputs),
+            nn.Linear(
+                self.features.vec_encoding_size, self.features.vec_encoding_size // 2
+            ),
+            nn.GELU(),
         )
 
         self.value_head = nn.Sequential(
@@ -81,53 +107,105 @@ class ControlDroppingPolicy(nn.Module):
             nn.Linear(self.features.vec_encoding_size, 1),
         )
 
-        self.to(self.device)
+        # Initialize action distribution components
+        action_dim = self.action_space.shape[0]
+        self.action_net = nn.Linear(self.features.vec_encoding_size // 2, action_dim)
+        self.log_std = nn.Parameter(torch.zeros(action_dim), requires_grad=True)
 
-        # Not being used atm:
-        # self.features = DynamixModel(
-        #     state_space=obs_space,
-        #     device=device,
-        #     vec_encoding_size=dynamix_vec_encoding_size,
-        #     num_tsf_layer=dynamix_num_tsf_layer,
-        #     num_residual_blocks=dynamix_num_residual_blocks,
+    def forward(self, obs, deterministic=False):
+        features = self._extract_features(obs)
+        actions = obs["actions"]
+        latent_pi, latent_vf = self._get_latent(features, actions)
 
-        #     pretrain=False,
-        # )
-        # transformer_layer = nn.TransformerEncoderLayer(
-        #     batch_first=True,
-        #     d_model=self.features.object_encoder.flatten_size,
-        #     nhead=action_ff_head,
-        #     dim_feedforward=action_ff_dim,
-        #     dropout=0.08,
-        #     device=self.device,
-        # )
-        # # Stack 4 of these layers together
-        # self.actions_encoder = nn.TransformerEncoder(
-        #     transformer_layer,
-        #     num_layers=4,
-        # )
+        # Process latent_pi through policy_head
+        policy_features = self.policy_head(latent_pi)
 
-        # self.action_output_dim = (
-        # self.features.object_encoder.flatten_size * self.action_encoder_num_action
-        # )
-        # self.lower_feature_dim_cast = nn.Linear(
-        #     self.action_output_dim, self.features.object_encoder.flatten_size
-        # )
+        # Compute mean action
+        mean_actions = self.action_net(policy_features)
 
-    def forward(self, tensordict: TensorDict):
-        obs = tensordict.get("observation")
+        # Compute the standard deviation
+        log_std = self.log_std.expand_as(mean_actions)
+        std = torch.exp(log_std)
+
+        # Sample actions
+        if deterministic:
+            actions = mean_actions
+        else:
+            actions = Normal(mean_actions, std).rsample()
+
+        log_prob = Normal(mean_actions, std).log_prob(actions).sum(axis=-1)
+
+        # Compute value
+        values = self.value_head(latent_vf)
+
+        return actions, values, log_prob
+
+    def _extract_features(self, obs):
         features = self.features(obs)
-        state_estimation = self.estimator(
-            torch.cat([features, obs["state_attrib"]], dim=1)
-        )
+        return features
 
-        action_params = self.policy_head(state_estimation)
-        value = self.value_head(state_estimation)
+    def _get_latent(self, features, actions):
+        B, T, D = actions.shape
+        actions_reshaped = actions.view(B, T * D)
+        projected_actions = self.action_projector(actions_reshaped)
+        shared_latent = self.estimator(torch.cat((features, projected_actions), dim=-1))
+        return shared_latent, shared_latent
 
-        return TensorDict(
-            {
-                "action_params": action_params,
-                "state_value": value,
-            },
-            batch_size=tensordict.batch_size,
-        )
+    def predict_values(self, obs: torch.Tensor) -> torch.Tensor:
+        """
+        Get the estimated values according to the current policy given the observations.
+
+        :param obs: Observation
+        :return: the estimated values.
+        """
+        features = self._extract_features(obs)
+        actions = obs["actions"]
+        _, latent_vf = self._get_latent(features, actions)
+        return self.value_head(latent_vf)
+
+    def evaluate_actions(self, obs, actions):
+        features = self._extract_features(obs)
+        actions = obs["actions"]
+        latent_pi, latent_vf = self._get_latent(features, actions)
+
+        policy_features = self.policy_head(latent_pi)
+        mean_actions = self.action_net(policy_features)
+
+        log_std = self.log_std.expand_as(mean_actions)
+        std = torch.exp(log_std)
+
+        distribution = Normal(mean_actions, std)
+        log_prob = distribution.log_prob(actions).sum(axis=-1)
+        entropy = distribution.entropy().sum(axis=-1)
+
+        values = self.value_head(latent_vf)
+
+        return values, log_prob, entropy
+
+    def predict(self, observation, state=None, episode_start=None, deterministic=False):
+
+        vectorized_env = is_vectorized_observation(observation, self.observation_space)
+        observation = observation.reshape((-1,) + self.observation_space.shape)
+
+        observation = torch.as_tensor(observation).float().to(self.device)
+        with torch.no_grad():
+            actions, values, log_prob, entropy = self.forward(
+                observation, deterministic=deterministic
+            )
+        actions = actions.cpu().numpy()
+
+        if not vectorized_env:
+            actions = actions[0]
+
+        return actions, state
+
+    # @property
+    # def device(self) -> torch.device:
+    #     """Infer which device this policy lives on by inspecting its parameters.
+    #     If it has no parameters, the 'cpu' device is used as a fallback.
+
+    #     :return:
+    #     """
+    #     for param in self.parameters():
+    #         return param.device
+    #     return torch.device("cpu")

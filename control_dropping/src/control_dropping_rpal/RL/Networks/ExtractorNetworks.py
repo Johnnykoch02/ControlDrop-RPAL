@@ -1049,38 +1049,46 @@ class PositionalEncoding(nn.Module):
         x = self.pe[: self.max_length, :].unsqueeze(0)
         return x
 
+
 # -------------------------------------------------------------- #
 # ---------------- Query Pooling Layer ------------------------- #
 # -------------------------------------------------------------- #
 
 
 class QueryPoolingLayer(nn.Module):
-    def __init__(self, embed_dim: int, num_queries:int):
+    def __init__(self, embed_dim: int, num_queries: int):
         super(QueryPoolingLayer, self).__init__()
         self.num_queries = num_queries
-        self.queries = nn.Parameter(th.randn(num_queries, embed_dim))  # Learnable queries
-        self.fc = nn.Linear(embed_dim, embed_dim)  # Fully connected layer to transform queries
+        self.queries = nn.Parameter(
+            th.randn(num_queries, embed_dim)
+        )  # Learnable queries
+        self.fc = nn.Linear(
+            embed_dim, embed_dim
+        )  # Fully connected layer to transform queries
 
     def forward(self, x):
         # x: (B, N, embed_dim)
         B, N, embed_dim = x.shape
-        
+
         # Apply the fully connected layer to queries
         queries = self.fc(self.queries)  # (num_queries, embed_dim)
-        
+
         # Calculate attention scores (unnormalized dot product attention)
-        attention_scores = th.einsum('bnd,qd->bnq', x, queries)  # (B, N, num_queries)
-        
+        attention_scores = th.einsum("bnd,qd->bnq", x, queries)  # (B, N, num_queries)
+
         # Softmax to get attention weights
         attention_weights = th.softmax(attention_scores, dim=1)  # (B, N, num_queries)
-        
+
         # Apply attention weights to the input and sum over N
-        pooled_output = th.einsum('bnd,bnq->bqd', x, attention_weights)  # (B, num_queries, embed_dim)
-        
+        pooled_output = th.einsum(
+            "bnd,bnq->bqd", x, attention_weights
+        )  # (B, num_queries, embed_dim)
+
         # Mean the result across the num_queries dimension
         pooled_output = pooled_output.mean(dim=1)  # (B, embed_dim)
-        
+
         return pooled_output
+
 
 # ------------------------------------------------------------------------- #
 # ----------------- TemporalObjectTactileEncoder_Additive ----------------- #
@@ -1220,7 +1228,10 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         )
 
         if os.path.exists(file):
-            self.load_state_dict(th.load(file))
+            state_dict = th.load(file)
+            if "state_dict" in state_dict:
+                state_dict = state_dict["state_dict"]
+            self.load_state_dict(state_dict)
 
     def save_checkpoint(self, file=None):
         print("[TemporalObjectTactileEncoder_Additive] Saving Checkpoint...")
@@ -1261,10 +1272,9 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
 
         return observations
 
-    def preprocess_observations(self, 
-                                observations, 
-                                query_tensor: Optional[th.Tensor]=None,
-                                is_val=False):
+    def preprocess_observations(
+        self, observations, query_tensor: Optional[th.Tensor] = None, is_val=False
+    ):
         """Input Dict Tensor for the Transformer:
         finger_1_location: (batch_size, T, embed_dim*)
         finger_2_location: (batch_size, T, embed_dim*)
@@ -1373,8 +1383,10 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
         obj_proj_vectors = obj_proj_vectors.reshape(B, N * T, embed_dim).to(self.device)
 
         state_query_tensor = (
-            th.zeros_like(tac_proj_vectors[:, 0, :]).unsqueeze(dim=1).to(self.device)
-        ) if query_tensor is None else query_tensor.expand(B, 1, embed_dim).contiguous()
+            (th.zeros_like(tac_proj_vectors[:, 0, :]).unsqueeze(dim=1).to(self.device))
+            if query_tensor is None
+            else query_tensor.expand(B, 1, embed_dim).contiguous()
+        )
 
         trf_input_tensor = th.concatenate(
             [
@@ -1393,16 +1405,13 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
 
         return trf_input_tensor
 
-    def forward(self, 
-                observations,
-                query_tensor: Optional[th.Tensor]=None, 
-                is_val=False) -> th.Tensor:
+    def forward(
+        self, observations, query_tensor: Optional[th.Tensor] = None, is_val=False
+    ) -> th.Tensor:
 
         trf_input_tensor = self.preprocess_observations(
-            observations,
-            query_tensor=query_tensor, 
-            is_val=is_val
-            )
+            observations, query_tensor=query_tensor, is_val=is_val
+        )
 
         trf_output = self.trns_encoder(trf_input_tensor)
         trf_output = th.nan_to_num(trf_output)
@@ -1487,7 +1496,7 @@ class DynamixModel(nn.Module):
         self.delta_state_network = nn.Sequential(
             # CAST
             nn.Linear(vec_encoding_size + 5, vec_encoding_size * 2),
-            # lambda x: 
+            # lambda x:
             ResidualBlocks1D(
                 feature_dim=vec_encoding_size * 2,
                 num_blocks=num_residual_blocks,
@@ -1497,21 +1506,20 @@ class DynamixModel(nn.Module):
             nn.Linear(vec_encoding_size * 2, vec_encoding_size),
         )
 
-
         self.bn_embedding = nn.LayerNorm(vec_encoding_size)
         self.bn_delta = nn.LayerNorm(vec_encoding_size)
 
-        self.predictor = nn.Sequential(
-            # Recieves Delta State
-            ResidualBlocks1D(
-                feature_dim=vec_encoding_size * 2,
-                num_blocks=5,
-                embed_dim=embed_dim_high,
-            ),
-            nn.Linear(vec_encoding_size * 2, vec_encoding_size),
-            self.activation(),
-            nn.Dropout(p=dropout_prob),
-        )
+        # self.predictor = nn.Sequential(
+        #     # Recieves Delta State
+        #     ResidualBlocks1D(
+        #         feature_dim=vec_encoding_size * 2,
+        #         num_blocks=5,
+        #         embed_dim=embed_dim_high,
+        #     ),
+        #     nn.Linear(vec_encoding_size * 2, vec_encoding_size),
+        #     self.activation(),
+        #     nn.Dropout(p=dropout_prob),
+        # )
 
         modules = {}
         for k, size in DYNAMIX_OUTPUT_SIZES_DICT.items():

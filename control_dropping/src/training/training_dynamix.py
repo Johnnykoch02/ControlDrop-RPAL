@@ -1,6 +1,7 @@
 ## Initialization:: Use env stbl3 or raylib
 import pickle
 import os
+
 CONTROL_DROP_DIR = os.environ["CONTROL_DROP_DIR"]
 
 import argparse
@@ -146,10 +147,10 @@ state_space = {
 }
 
 # Params
-NUM_LAYERS_TRANSFORMER = 12
+NUM_LAYERS_TRANSFORMER = 6
 NUM_RESIDUALS = 3
 EPOCHS = 1000
-VEC_ENCODING_SIZE = 512
+VEC_ENCODING_SIZE = 128
 
 MODEL_ARGS = {
     "vec_encoding_size": VEC_ENCODING_SIZE,
@@ -216,42 +217,105 @@ key_losses_critiq = {
 
 
 def get_args():
-    parser = argparse.ArgumentParser(description='Joint Model Training')
-    parser.add_argument('--name', type=str, required=True, help='Name for the experiment')
-    parser.add_argument('--batch_size', type=int, default=BATCH_SIZE, help='Batch size for training')
-    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs')
-    parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd'], help='Optimizer')
-    parser.add_argument('--warmup_epochs', type=int, default=5, help='Number of warmup epochs')
-    parser.add_argument('--num_workers', type=int, default=4, help='Number of data loading workers')
-    parser.add_argument('--world_size', type=int, default=1, help='Number of processes for distributed training')
-    parser.add_argument('--lr_scheduler', type=str, default='cosine', choices=['cosine', 'linear', 'constant'], help='Learning rate scheduler')
-    parser.add_argument('--min_lr', type=float, default=1e-6, help='Minimum learning rate for cosine annealing')
-    parser.add_argument('--clip_grad_norm', type=float, default=None, help='grad norm clip (try 2.0)')
+    parser = argparse.ArgumentParser(description="Joint Model Training")
+    parser.add_argument(
+        "--name", type=str, required=True, help="Name for the experiment"
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=BATCH_SIZE, help="Batch size for training"
+    )
+    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
+    parser.add_argument("--epochs", type=int, default=100, help="Number of epochs")
+    parser.add_argument(
+        "--optimizer",
+        type=str,
+        default="adam",
+        choices=["adam", "sgd"],
+        help="Optimizer",
+    )
+    parser.add_argument(
+        "--warmup_epochs", type=int, default=5, help="Number of warmup epochs"
+    )
+    parser.add_argument(
+        "--accum_freq", type=int, default=1, help="Gradient accumulation frequency"
+    )
+    parser.add_argument(
+        "--num_workers", type=int, default=4, help="Number of data loading workers"
+    )
+    parser.add_argument(
+        "--world_size",
+        type=int,
+        default=1,
+        help="Number of processes for distributed training",
+    )
+    parser.add_argument(
+        "--lr_scheduler",
+        type=str,
+        default="cosine",
+        choices=["cosine", "linear", "constant"],
+        help="Learning rate scheduler",
+    )
+    parser.add_argument(
+        "--min_lr",
+        type=float,
+        default=1e-6,
+        help="Minimum learning rate for cosine annealing",
+    )
+    parser.add_argument(
+        "--clip_grad_norm", type=float, default=None, help="grad norm clip (try 2.0)"
+    )
     args = parser.parse_args()
     setattr(args, "distributed", min(args.world_size, torch.cuda.device_count()) > 1)
     return args
 
+
+def get_unique_parameters(models):
+    seen_params = set()
+    unique_params = []
+
+    for model in models:
+        for param in model.parameters():
+            if param not in seen_params:
+                seen_params.add(param)
+                unique_params.append(param)
+
+    return unique_params
+
+
 def get_optimizer_and_scheduler(models, args):
-    params = list(models[0].parameters()) + list(models[1].parameters())
-    if args.optimizer == 'adam':
+    params = get_unique_parameters(models)
+    if args.optimizer == "adam":
         optimizer = torch.optim.Adam(params, lr=args.lr)
-    elif args.optimizer == 'sgd':
+    elif args.optimizer == "sgd":
         optimizer = torch.optim.SGD(params, lr=args.lr, momentum=0.9)
 
-    if args.lr_scheduler == 'constant':
+    if args.lr_scheduler == "constant":
         return optimizer, None
 
-    warmup_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=args.warmup_epochs)
+    warmup_scheduler = LinearLR(
+        optimizer, start_factor=0.1, total_iters=args.warmup_epochs
+    )
 
-    if args.lr_scheduler == 'cosine':
-        main_scheduler = CosineAnnealingLR(optimizer, T_max=args.epochs - args.warmup_epochs, eta_min=args.min_lr)
-    elif args.lr_scheduler == 'linear':
-        main_scheduler = LinearLR(optimizer, start_factor=1.0, end_factor=0.1, total_iters=args.epochs - args.warmup_epochs)
+    if args.lr_scheduler == "cosine":
+        main_scheduler = CosineAnnealingLR(
+            optimizer, T_max=args.epochs - args.warmup_epochs, eta_min=args.min_lr
+        )
+    elif args.lr_scheduler == "linear":
+        main_scheduler = LinearLR(
+            optimizer,
+            start_factor=1.0,
+            end_factor=0.1,
+            total_iters=args.epochs - args.warmup_epochs,
+        )
 
-    scheduler = SequentialLR(optimizer, schedulers=[warmup_scheduler, main_scheduler], milestones=[args.warmup_epochs])
+    scheduler = SequentialLR(
+        optimizer,
+        schedulers=[warmup_scheduler, main_scheduler],
+        milestones=[args.warmup_epochs],
+    )
 
     return optimizer, scheduler
+
 
 def make_dynamix_and_predictor(
     model_args: Dict[str, Any]
@@ -302,23 +366,18 @@ def make_dynamix_and_predictor(
         encoder=encoder,
     )
 
-    return dynamix_model, critiq_model    
+    return dynamix_model, critiq_model
+
 
 class DynamixCritiqLoss(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(
-            self,
-            dynamix_preds,
-            dynamix_target,
-            critiq_preds,
-            critiq_target
-    ):
+    def forward(self, dynamix_preds, dynamix_target, critiq_preds, critiq_target):
         dynamix_loss = th.stack(
             [
                 key_losses_dynamix[key](dynamix_preds[key], dynamix_target[key])
-                for key in key_losses_dynamix.keys() 
+                for key in key_losses_dynamix.keys()
                 if key in dynamix_preds and key in dynamix_target
             ]
         ).sum()
@@ -326,31 +385,23 @@ class DynamixCritiqLoss(nn.Module):
         critiq_loss = th.stack(
             [
                 key_losses_critiq[key](critiq_preds[key], critiq_target[key])
-                for key in key_losses_critiq.keys() 
+                for key in key_losses_critiq.keys()
                 if key in critiq_preds and key in critiq_target
             ]
         ).sum()
 
-        return {
-            "dynamix_loss": dynamix_loss, "critiq_loss": critiq_loss
-        }
-    
+        return {"dynamix_loss": dynamix_loss, "critiq_loss": critiq_loss}
+
 
 class DynamixCritiqValidation(nn.Module):
     def __init__(self):
         super().__init__()
 
-    def forward(
-            self,
-            dynamix_preds,
-            dynamix_target,
-            critiq_preds,
-            critiq_target
-    ):
+    def forward(self, dynamix_preds, dynamix_target, critiq_preds, critiq_target):
         dynamix_loss = th.stack(
             [
                 key_losses_dynamix[key](dynamix_preds[key], dynamix_target[key])
-                for key in key_losses_dynamix.keys() 
+                for key in key_losses_dynamix.keys()
                 if key in dynamix_preds and key in dynamix_target
             ]
         ).sum()
@@ -358,7 +409,7 @@ class DynamixCritiqValidation(nn.Module):
         critiq_loss = th.stack(
             [
                 key_losses_critiq[key](critiq_preds[key], critiq_target[key])
-                for key in key_losses_critiq.keys() 
+                for key in key_losses_critiq.keys()
                 if key in critiq_preds and key in critiq_target
             ]
         ).sum()
@@ -370,28 +421,32 @@ class DynamixCritiqValidation(nn.Module):
         print("[DBG] obj cnt acc:", obj_count_accuracy, correct.shape)
 
         return {
-            "dynamix_loss": dynamix_loss, "critiq_loss": critiq_loss, "obj_count_accuracy": obj_count_accuracy
+            "dynamix_loss": dynamix_loss,
+            "critiq_loss": critiq_loss,
+            "obj_count_accuracy": obj_count_accuracy,
         }
 
-def train_one_epoch(models, train_loader, optimizer, criterion, device, epoch, writer):
+
+def train_one_epoch(
+    models, train_loader, optimizer, criterion, device, epoch, writer, args
+):
     dynamix_model, critiq_model = models
     dynamix_model.train()
     critiq_model.train()
-    
+
     total_loss = 0
     loss_info = {}
+    optimizer.zero_grad()  # Move this outside the loop for gradient accumulation
 
-    for batch in tqdm(train_loader, desc=f'Epoch {epoch}'):
-        dynamix_data, dynamix_target = batch['dynamix']
-        critiq_state, critiq_n_state, critiq_target = batch['critiq']
+    for i, batch in enumerate(tqdm(train_loader, desc=f"Epoch {epoch}")):
+        dynamix_data, dynamix_target = batch["dynamix"]
+        critiq_state, critiq_n_state, critiq_target = batch["critiq"]
 
         dynamix_data = {k: v.to(device) for k, v in dynamix_data.items()}
         dynamix_target = {k: v.to(device) for k, v in dynamix_target.items()}
         critiq_state = {k: v.to(device) for k, v in critiq_state.items()}
         critiq_n_state = {k: v.to(device) for k, v in critiq_n_state.items()}
         critiq_target = {k: v.to(device) for k, v in critiq_target.items()}
-
-        optimizer.zero_grad()
 
         dynamix_pred = dynamix_model(dynamix_data)
         critiq_pred = critiq_model(critiq_state, critiq_n_state)
@@ -403,39 +458,44 @@ def train_one_epoch(models, train_loader, optimizer, criterion, device, epoch, w
                     loss_info[loss_key] = 0
                 loss_info[loss_key] += loss_value.item()
             loss = sum(loss.values())
-        
+
+        # Normalize the loss to account for accumulation
+        loss = loss / args.accum_freq
         loss.backward()
 
-        if args.clip_grad_norm:
-            clip_grad_norm_(dynamix_model.parameters(), args.clip_grad_norm)
-            clip_grad_norm_(critiq_model.parameters(), args.clip_grad_norm)
+        total_loss += loss.item() * args.accum_freq  # Adjust total loss calculation
 
-        optimizer.step()
+        if (i + 1) % args.accum_freq == 0 or (i + 1) == len(train_loader):
+            if args.clip_grad_norm:
+                clip_grad_norm_(dynamix_model.parameters(), args.clip_grad_norm)
+                clip_grad_norm_(critiq_model.parameters(), args.clip_grad_norm)
 
-        total_loss += loss.item()
-    
+            optimizer.step()
+            optimizer.zero_grad()
+
     avg_loss = total_loss / len(train_loader)
-    writer.add_scalar('Loss/train/total', avg_loss, epoch)
-    
+    writer.add_scalar("Loss/train/total", avg_loss, epoch)
+
     if loss_info:
         for k, v in loss_info.items():
             avg_loss_component = v / len(train_loader)
-            writer.add_scalar(f'Loss/train/{k}', avg_loss_component, epoch)
-    
+            writer.add_scalar(f"Loss/train/{k}", avg_loss_component, epoch)
+
     return avg_loss, loss_info
+
 
 def validate(models, val_loader, criterion, device, epoch, writer):
     dynamix_model, critiq_model = models
     dynamix_model.eval()
     critiq_model.eval()
-    
+
     total_loss = 0
     loss_info = {}
 
     with th.no_grad():
-        for batch in tqdm(val_loader, desc='Validation'):
-            dynamix_data, dynamix_target = batch['dynamix']
-            critiq_state, critiq_n_state, critiq_target = batch['critiq']
+        for batch in tqdm(val_loader, desc="Validation"):
+            dynamix_data, dynamix_target = batch["dynamix"]
+            critiq_state, critiq_n_state, critiq_target = batch["critiq"]
 
             dynamix_data = {k: v.to(device) for k, v in dynamix_data.items()}
             dynamix_target = {k: v.to(device) for k, v in dynamix_target.items()}
@@ -453,25 +513,26 @@ def validate(models, val_loader, criterion, device, epoch, writer):
                         loss_info[loss_key] = 0
                     loss_info[loss_key] += loss_value.item()
                 loss = sum(loss.values())
-            
+
             total_loss += loss.item()
 
     avg_loss = total_loss / len(val_loader)
-    writer.add_scalar('Loss/val/total', avg_loss, epoch)
-    
+    writer.add_scalar("Loss/val/total", avg_loss, epoch)
+
     if loss_info:
         for k, v in loss_info.items():
             avg_loss_component = v / len(val_loader)
-            writer.add_scalar(f'Loss/val/{k}', avg_loss_component, epoch)
-    
+            writer.add_scalar(f"Loss/val/{k}", avg_loss_component, epoch)
+
     return avg_loss, loss_info
+
 
 def train(rank, world_size, args):
     if args.distributed:
         setup(rank, world_size)
-    
+
     device = torch.device(f"cuda:{rank}" if torch.cuda.is_available() else "cpu")
-    
+
     dynamix_model, critiq_model = make_dynamix_and_predictor(MODEL_ARGS)
 
     if args.distributed:
@@ -480,77 +541,114 @@ def train(rank, world_size, args):
     else:
         dynamix_model = dynamix_model.to(device)
         critiq_model = critiq_model.to(device)
-    
+
     models = (dynamix_model, critiq_model)
     optimizer, scheduler = get_optimizer_and_scheduler(models, args)
-    
-    train_dataset, val_dataset = get_joint_dataset(PATH_DYNAMIX, PATH_CRITIQ)
-    
-    train_sampler = DistributedSampler(train_dataset) if args.distributed else None
-    val_sampler = DistributedSampler(val_dataset, shuffle=False) if args.distributed else None
-    
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
-                              num_workers=args.num_workers, sampler=train_sampler)
 
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False,
-                            num_workers=args.num_workers, sampler=val_sampler)
-    
-    
+    train_dataset, val_dataset = get_joint_dataset(
+        PATH_DYNAMIX, PATH_CRITIQ, train_test_split=0.98
+    )
+
+    train_sampler = DistributedSampler(train_dataset) if args.distributed else None
+    val_sampler = (
+        DistributedSampler(val_dataset, shuffle=False) if args.distributed else None
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=(train_sampler is None),
+        num_workers=args.num_workers,
+        sampler=train_sampler,
+    )
+
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.num_workers,
+        sampler=val_sampler,
+    )
 
     train_criterion = DynamixCritiqLoss()
     val_criterion = DynamixCritiqValidation()
 
-    log_dir = os.path.join('./logs', args.name)
+    log_dir = os.path.join("./logs", args.name)
     if os.path.exists(os.path.join(log_dir)):
-        experiment_cnt = len([i for i in os.listdir("./logs") if i.startswith(args.name)])
-        log_dir = os.path.join('./logs', f"{args.name}_{experiment_cnt+1}")
+        experiment_cnt = len(
+            [i for i in os.listdir("./logs") if i.startswith(args.name)]
+        )
+        log_dir = os.path.join("./logs", f"{args.name}_{experiment_cnt+1}")
         logging.warn(f"{args.name} already exists, new logging directory: {log_dir}")
-    writer = SummaryWriter(log_dir=os.path.join(log_dir, 'tensorboard')) if rank == 0 else None
+    writer = (
+        SummaryWriter(log_dir=os.path.join(log_dir, "tensorboard"))
+        if rank == 0
+        else None
+    )
 
-    
-    os.makedirs(os.path.join(log_dir, 'checkpoints'), exist_ok=True)
-    os.makedirs(os.path.join(log_dir, 'tensorboard'), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, "checkpoints"), exist_ok=True)
+    os.makedirs(os.path.join(log_dir, "tensorboard"), exist_ok=True)
 
-    
-    best_val_loss = float('inf')
+    best_val_loss = float("inf")
     for epoch in range(args.epochs):
         if train_sampler:
             train_sampler.set_epoch(epoch)
-        
-        train_loss, train_info = train_one_epoch(models, train_loader, optimizer, train_criterion, device, epoch, writer)
-        val_loss, val_info = validate(models, val_loader, val_criterion, device, epoch, writer)
-        
-        train_log = "\n\t".join([f"Train {k}: {v / len(train_loader):.4f}" for k, v in train_info.items()])
-        val_log = "\n\t".join([f"Val {k}: {v / len(val_loader):.4f}" for k, v in val_info.items()])
+
+        train_loss, train_info = train_one_epoch(
+            models,
+            train_loader,
+            optimizer,
+            train_criterion,
+            device,
+            epoch,
+            writer,
+            args,
+        )
+        val_loss, val_info = validate(
+            models, val_loader, val_criterion, device, epoch, writer
+        )
+
+        train_log = "\n\t".join(
+            [f"Train {k}: {v / len(train_loader):.4f}" for k, v in train_info.items()]
+        )
+        val_log = "\n\t".join(
+            [f"Val {k}: {v / len(val_loader):.4f}" for k, v in val_info.items()]
+        )
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             if rank == 0:
-                torch.save({
-                    'dynamix_model': dynamix_model.state_dict(),
-                    'critiq_model': critiq_model.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                }, os.path.join(log_dir, 'checkpoints', f'best_model_epoch_{epoch}.pth'))
-        
+                torch.save(
+                    {
+                        "dynamix_model": dynamix_model.state_dict(),
+                        "critiq_model": critiq_model.state_dict(),
+                        "optimizer": optimizer.state_dict(),
+                    },
+                    os.path.join(
+                        log_dir, "checkpoints", f"best_model_epoch_{epoch}.pth"
+                    ),
+                )
+
         if rank == 0:
-            logging.info(f'Epoch {epoch}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}')
+            logging.info(
+                f"Epoch {epoch}: Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}"
+            )
             logging.info(train_log)
             logging.info(val_log)
-            logging.info("-"*25)
-        
+            logging.info("-" * 25)
+
         if scheduler:
             scheduler.step()
             if rank == 0:
-                writer.add_scalar('learning_rate', optimizer.param_groups[0]['lr'], epoch)
-
-
-
+                writer.add_scalar(
+                    "learning_rate", optimizer.param_groups[0]["lr"], epoch
+                )
 
     if args.distributed:
         cleanup()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     args = get_args()
     if args.distributed:
         run_distributed(train, args.world_size, args)

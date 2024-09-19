@@ -7,8 +7,13 @@ Checkpoints/
 *.gz
 *tfevents*
 Data_Collection/Grasping_Data_Tianze/
+
+# Archived files:
 *.pkl
+*.pt 
+*.zip
 
 control_dropping/src/control_dropping_rpal.egg-info/
 logs/
 rpal.env
+

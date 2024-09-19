@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objs as go
 from plotly.subplots import make_subplots
 
+
 def plot_results_depracated(dictionaries, params, y_labels, range_spc, file_name):
     num_params = len(params)
     x_values = list(range_spc)
@@ -18,6 +19,7 @@ def plot_results_depracated(dictionaries, params, y_labels, range_spc, file_name
     plt.show()
     fig.savefig(file_name)
 
+
 def plot_results(dictionaries, params, y_labels, range_spc, file_name):
     num_params = len(params)
     x_values = list(range_spc)
@@ -33,6 +35,7 @@ def plot_results(dictionaries, params, y_labels, range_spc, file_name):
     fig.update_layout(height=600 * num_params, width=800)
     fig.write_image(file_name)
 
+
 def print_dict(d, indent=0):
     if isinstance(d, dict):
         for k, v in d.items():
@@ -45,6 +48,8 @@ def print_dict(d, indent=0):
                 print_dict(i, indent + 1)
         else:
             print("\t" * indent, d.shape)
+
+
 ### DEMO ###
 # plot_resultsz([model_performance[0], model_performance[1], model_performance[2]],
 #              ['performance', 'history', 'other'], ['easy', 'medium', 'hard'], range(100), os.path.join(os.getcwd(), 'test.png'))

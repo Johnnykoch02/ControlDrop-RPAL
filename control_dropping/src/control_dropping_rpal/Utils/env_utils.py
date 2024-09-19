@@ -5,6 +5,34 @@ from typing import List, Tuple, Union, Callable
 import gymnasium as gym
 import threading
 
+import numpy as np
+from gymnasium import spaces
+
+
+def is_vectorized_observation(observation, observation_space):
+    """
+    Check whether the observation is vectorized or not.
+
+    :param observation: the input observation to check
+    :param observation_space: the observation space of the environment
+    :return: True if the observation is vectorized, False otherwise
+    """
+    if isinstance(observation_space, spaces.Dict):
+        return any(
+            is_vectorized_observation(obs, observation_space[key])
+            for key, obs in observation.items()
+        )
+    elif isinstance(observation_space, spaces.Box):
+        return observation.shape != observation_space.shape
+    elif isinstance(observation_space, spaces.Discrete):
+        return isinstance(observation, np.ndarray) and observation.shape != ()
+    elif isinstance(observation_space, spaces.MultiDiscrete):
+        return observation.shape != observation_space.shape
+    elif isinstance(observation_space, spaces.MultiBinary):
+        return observation.shape != observation_space.shape
+    else:
+        raise ValueError(f"Unsupported observation space: {type(observation_space)}")
+
 
 @PublicAPI
 class AsyncVectorEnv(BaseEnv):

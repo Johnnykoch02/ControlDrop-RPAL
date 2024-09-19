@@ -4,7 +4,7 @@ import os
 CONTROL_DROP_DIR = os.environ["CONTROL_DROP_DIR"]
 
 import numpy as np
-from typing import  Tuple
+from typing import Tuple
 
 # Torch
 import torch as th
@@ -12,12 +12,14 @@ from torch.utils.data import Dataset, random_split
 
 from control_dropping_rpal.RL.control_dropping_env import T_buffer
 
+
 def mult(shape):
     """Utility function to compute the product of elements in a shape tuple."""
     product = 1
     for dim in shape:
         product *= dim
     return product
+
 
 # removes inhomogeneous elements from a dataset:
 def remove_inhomogeneous_elements(aggregated_data):
@@ -41,6 +43,7 @@ def remove_inhomogeneous_elements(aggregated_data):
             ]
 
     return aggregated_data, list(removal_idxs)
+
 
 def load_data_node_format(file_path, target_range=4):
     if not os.path.exists(os.path.dirname(file_path)):
@@ -341,6 +344,7 @@ def normalize_data_critiq(data):
 
 ## Augments Data into Correct Format (Converts the Dict objects from Key, Idx, value to Idx, Key, value format)
 
+
 def convert_dataset_dynamix(
     data,
 ):
@@ -486,6 +490,7 @@ def convert_dataset_critiq(
 
 ## Dataset Class for Object Motion Prediction
 
+
 class ObjDataset(Dataset):
     def __init__(self, data):
         self.elements, self.preds = data
@@ -574,6 +579,7 @@ def load_dynamix_and_critiq_data(
         critiq_validation_dataset,
     )
 
+
 class CombinedDataset(Dataset):
     def __init__(self, dynamix_dataset, critiq_dataset):
         self.dynamix_dataset = dynamix_dataset
@@ -588,6 +594,7 @@ class CombinedDataset(Dataset):
 
     def __len__(self):
         return self.length
+
 
 def debug_datasets(dynamix_dataset, critiq_dataset, batch_size=16):
     combined_dataset = CombinedDataset(dynamix_dataset, critiq_dataset)
@@ -626,12 +633,10 @@ def custom_dynamix_critiq_collate(batch):
     critiq_data = [item["critiq"] for item in batch]
 
     dynamix_elements = {
-        k: th.stack([d[0][k] for d in dynamix_data])
-        for k in dynamix_data[0][0].keys()
+        k: th.stack([d[0][k] for d in dynamix_data]) for k in dynamix_data[0][0].keys()
     }
     dynamix_preds = {
-        k: th.stack([d[1][k] for d in dynamix_data])
-        for k in dynamix_data[0][1].keys()
+        k: th.stack([d[1][k] for d in dynamix_data]) for k in dynamix_data[0][1].keys()
     }
 
     critiq_state = {
@@ -649,9 +654,21 @@ def custom_dynamix_critiq_collate(batch):
         "critiq": (critiq_state, critiq_n_state, critiq_preds),
     }
 
-def get_joint_dataset(dynamix_path, critiq_path, train_test_split=0.92,):
-    dynamix_train_dataset, dynamix_validation_dataset, critiq_train_dataset, critiq_validation_dataset = load_dynamix_and_critiq_data(dynamix_path, critiq_path, train_test_split=train_test_split)
+
+def get_joint_dataset(
+    dynamix_path,
+    critiq_path,
+    train_test_split=0.92,
+):
+    (
+        dynamix_train_dataset,
+        dynamix_validation_dataset,
+        critiq_train_dataset,
+        critiq_validation_dataset,
+    ) = load_dynamix_and_critiq_data(
+        dynamix_path, critiq_path, train_test_split=train_test_split
+    )
     train_dataset = CombinedDataset(dynamix_train_dataset, critiq_train_dataset)
     val_dataset = CombinedDataset(dynamix_validation_dataset, critiq_validation_dataset)
-    
+
     return train_dataset, val_dataset
