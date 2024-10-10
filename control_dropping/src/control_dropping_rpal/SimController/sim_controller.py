@@ -500,16 +500,17 @@ class SimController:
         time.sleep(6)
 
     def step_arm_config(self, step):
-        config = []
-        for i, (angle, step) in enumerate(zip(self.get_arm_config(), step)):
-            if i == 4:
-                (
-                    config.append(angle + step)
-                    if -180 <= (angle + step) <= 0
-                    else config.append(angle)
-                )
-            else:
-                config.append(angle)
+        print("[step_arm_config] step: ", step)
+        config = np.array(self.get_arm_config()) + np.array(step)
+        # for i, (angle, step) in enumerate(zip(self.get_arm_config(), step)):
+        #     if i == 4:
+        #         (
+        #             config.append(angle + step)
+        #             if -180 <= (angle + step) <= 0
+        #             else config.append(angle)
+        #         )
+        #     else:
+        #         config.append(angle)
 
         sim.simxPauseCommunication(self.clientID, True)
         for handle, angle in zip(self.arm, config):

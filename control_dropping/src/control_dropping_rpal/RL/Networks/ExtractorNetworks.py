@@ -1424,6 +1424,10 @@ class TemporalObjectTactileEncoder_Additive(nn.Module):
     def freeze_parameters(self):
         for param in self.parameters():
             param.requires_grad_ = False
+    
+    def unlock_parameters(self):
+        for param in self.parameters():
+            param.requires_grad_ = True
 
 
 # ------------------------------------------------------------------------- #

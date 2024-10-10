@@ -159,14 +159,14 @@ class ControlDropPolicy(ActorCriticPolicy):
         :return: the estimated values.
         """
         features = self._extract_features(obs)
-        actions = obs["actions"]
-        _, latent_vf = self._get_latent(features, actions)
+        obs_actions = obs["actions"]
+        _, latent_vf = self._get_latent(features, obs_actions)
         return self.value_head(latent_vf)
 
     def evaluate_actions(self, obs, actions):
         features = self._extract_features(obs)
-        actions = obs["actions"]
-        latent_pi, latent_vf = self._get_latent(features, actions)
+        obs_actions = obs["actions"]
+        latent_pi, latent_vf = self._get_latent(features, obs_actions)
 
         policy_features = self.policy_head(latent_pi)
         mean_actions = self.action_net(policy_features)

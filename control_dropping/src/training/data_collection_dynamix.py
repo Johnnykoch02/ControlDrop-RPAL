@@ -6,9 +6,13 @@ import argparse
 from tqdm import tqdm
 from control_dropping_rpal.RL.control_dropping_env import BerrettHandGym
 import multiprocessing as mp
+from torch.utils.tensorboard import SummaryWriter
 
 # Ensure CONTROL_DROP_DIR is set in your environment variables
 CONTROL_DROP_DIR = os.environ.get("CONTROL_DROP_DIR")
+LOG_DIR = os.path.join(
+    CONTROL_DROP_DIR, "dc_logs", "data_collection_dynamix" 
+)
 if not CONTROL_DROP_DIR:
     raise EnvironmentError("CONTROL_DROP_DIR environment variable is not set")
 
@@ -16,6 +20,21 @@ DATA_SAVE_PATH = os.path.join(
     CONTROL_DROP_DIR, "Data_Collection", "Time_Dependent_Samples_5"
 )  # Experiment 5 is containing the joint critiq dynamix
 MAX_ACTION_COEF = 2.5
+
+class HookLogger:
+    def __init__(self, log_dir):
+        self.writer = SummaryWriter(log_dir)
+        self.step = 0
+
+    def log_hooks(self, hooks):
+        for key, hook in hooks.items():
+            if hook._val_history:
+                mean_value = np.mean(hook._val_history)
+                self.writer.add_scalar(f"Hooks/{key}", mean_value, self.step)
+        self.step += 1
+
+    def close(self):
+        self.writer.close()
 
 
 def save_data(data, file_path, save_data_lock):
@@ -55,11 +74,14 @@ def _get_sampled_action(action_space):
     )
     return action
 
-
-def collect_dynamix_data(num_steps, save_interval=1000, save_data_lock=None):
+def collect_dynamix_data(num_steps, save_interval=1000, save_data_lock=None, worker_id=0):
     env = BerrettHandGym(detailed_training=True, is_val=True)
     data = []
     data_point = env.reset()[0].copy()
+
+    # Initialize TensorboardLogger
+    log_dir = os.path.join(LOG_DIR, f"worker_{worker_id}")
+    tb_logger = HookLogger(log_dir)
 
     for i in tqdm(
         range(num_steps),
@@ -70,6 +92,9 @@ def collect_dynamix_data(num_steps, save_interval=1000, save_data_lock=None):
             action = _get_sampled_action(env.action_space)
             data_point["action"] = action
             state, reward, done, _ = env.step(action)
+
+            # Log hooks to TensorBoard
+            tb_logger.log_hooks(env.episodic_penalty_hooks)
 
             pred_state = env.simController.get_pred_state()
             pred_state["reward"] = reward
@@ -93,16 +118,16 @@ def collect_dynamix_data(num_steps, save_interval=1000, save_data_lock=None):
         save_data(data, DATA_SAVE_PATH, save_data_lock)
 
     env.close()
-
+    tb_logger.close()
 
 def main(args):
     if args.num_instances > 1:
         save_data_lock = mp.Lock()
         processes = []
-        for _ in range(args.num_instances):
+        for i in range(args.num_instances):
             p = mp.Process(
                 target=collect_dynamix_data,
-                args=(args.num_steps, args.save_interval, save_data_lock),
+                args=(args.num_steps, args.save_interval, save_data_lock, i),
             )
             p.start()
             processes.append(p)
@@ -111,7 +136,6 @@ def main(args):
             p.join()
     else:
         collect_dynamix_data(args.num_steps)
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Collect dynamix data")
@@ -128,7 +152,7 @@ if __name__ == "__main__":
         "--save_interval",
         type=int,
         default=5,
-        help="Number of parallel data collection instances",
+        help="Number of steps between each save",
     )
     args = parser.parse_args()
 

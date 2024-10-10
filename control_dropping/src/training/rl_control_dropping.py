@@ -51,6 +51,13 @@ def parse_args():
         help="Embedding checkpoint file name",
     )
     parser.add_argument(
+        "--rl_chkpoint",
+        type=str,
+        default=None,
+        required=False,
+        help="Embedding checkpoint file name",
+    )
+    parser.add_argument(
         "--experiment_name",
         type=str,
         default="dynamix_control_drop",
@@ -58,6 +65,10 @@ def parse_args():
     )
     parser.add_argument(
         "--freeze_encoder", action="store_true", help="Freeze the pretrained encoder"
+    )
+
+    parser.add_argument(
+        "--unlock_encoder", action="store_true", help="Forces unlocked pretrained encoder"
     )
 
     # PPO hyperparameters
@@ -149,8 +160,6 @@ def parse_args():
     parser.add_argument("--save_freq", type=int, default=10000, help="Save frequency")
     return parser.parse_args()
 
-    return parser.parse_args()
-
 
 def main(args):
     DATA_SAVE_PATH = os.path.join(CONTROL_DROP_DIR, "Data_Collection")
@@ -214,7 +223,19 @@ def main(args):
         verbose=args.verbose,
 
     )
-    callback = SaveOnBestRewardCallback(check_freq=args.save_freq, log_dir=checkpoint_save_dir, verbose=1)
+
+    if args.rl_chkpoint is not None:
+        model.load(args.rl_chkpoint)
+
+    if args.unlock_encoder:
+        model.policy.features.unlock_parameters()
+
+    callback = SaveOnBestRewardCallback(
+        check_freq=args.save_freq, 
+        log_dir=checkpoint_save_dir, 
+        verbose=1,
+        env=env
+        )
 
     # Train the model
     model.learn(
